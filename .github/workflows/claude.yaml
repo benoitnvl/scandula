@@ -1,0 +1,58 @@
+name: claude
+
+# Triggers:
+#  - opening a PR → Claude posts an initial review
+#  - pushing new commits to an open PR → Claude reviews the new diff
+#  - commenting "@claude …" anywhere on an issue or PR → Claude responds
+#
+# Setup once: add ANTHROPIC_API_KEY in repo Settings → Secrets and variables →
+# Actions → New repository secret. Until then this job fails on every PR.
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  claude:
+    # Skip drafts, and only fire on @claude mentions for comment events.
+    if: |
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
+      (github.event_name == 'issue_comment'         && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+
+    runs-on: stazzona
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0       # full history so Claude can read diff context
+
+      - name: Claude review
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: claude-sonnet-5
+          custom_instructions: |
+            This repo is Terraform (azurerm ~> 5.4) for Azure connectivity: regional
+            hub VNets whose address space is allocated by Azure Virtual Network
+            Manager (AVNM) IPAM pools, plus AVNM connectivity configurations and
+            deployments. When reviewing, especially flag:
+              - hardcoded address_space / address_prefixes on hub VNets or subnets
+                (they must come from IPAM `ip_address_pool` allocations);
+              - IPAM pool prefixes that could overlap the homelab (10.1.0.0/23) or
+                each other;
+              - any change that forces replacement of an IPAM pool, hub VNet or
+                network manager (name, location, prefixes) — call it out loudly;
+              - connectivity configuration changes not followed by an
+                `azurerm_network_manager_deployment` update (they don't take effect
+                until deployed);
+              - committed tenant/subscription ids, tfvars or backend.hcl.

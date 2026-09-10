@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(terraform fmt*)",
+      "Bash(terraform validate*)",
+      "Bash(terraform init -backend=false*)",
+      "Bash(terraform test*)",
+      "Bash(terraform output*)",
+      "Bash(make fmt*)",
+      "Bash(make validate*)",
+      "Bash(make test*)",
+      "Bash(make init-local*)",
+      "Bash(make output*)",
+      "Bash(make help*)"
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+# Copy to terraform.tfvars (gitignored) and adjust.
+#
+# Almost every value here is an address-plan decision, and most of them are
+# ForceNew. Read docs/design.md before changing a prefix or a region key.
+
+name_prefix = "scandula"
+location    = "uksouth" # control plane: RG, network manager, root pool
+
+ipam_root_prefix = "10.64.0.0/12" # 10.64.0.0 – 10.79.255.255
+
+regions = {
+  uks = {
+    location       = "uksouth"
+    address_prefix = "10.64.0.0/14"
+  }
+  ukw = {
+    location       = "ukwest"
+    address_prefix = "10.68.0.0/14"
+  }
+}
+
+# Reserve blocks that live outside AVNM's view, e.g. a P2S VPN client pool.
+# Keep them out of every region pool.
+# root_static_cidrs = {
+#   p2s-clients = ["10.79.255.0/24"]
+# }
+
+# Leave empty to scope AVNM to the subscription you're running against.
+# network_manager_scope = {
+#   management_group_ids = ["/providers/Microsoft.Management/managementGroups/<name>"]
+# }
+
+# tags = {
+#   environment = "prod"
+# }
