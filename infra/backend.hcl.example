@@ -1,0 +1,12 @@
+# Copy to backend.hcl (gitignored) and fill in, then `make init`.
+#
+# The state account is created once by hand — it can't manage itself.
+# See docs/bootstrap.md.
+resource_group_name  = "rg-scandula-tfstate"
+storage_account_name = "stscandulatfstate" # globally unique, 3–24 lowercase letters/digits
+container_name       = "tfstate"
+key                  = "connectivity.tfstate"
+
+# Entra ID data-plane auth (Storage Blob Data Contributor on the container) —
+# no storage account keys anywhere. Blob leases give us state locking.
+use_azuread_auth = true
