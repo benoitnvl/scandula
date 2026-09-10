@@ -16,6 +16,11 @@ credit** subscription with a spending limit: two hubs would burn through the cre
 under two days, and then Azure **disables the subscription, tfstate account included**.
 Never flip the flag there, and never flip it without the user saying so.
 
+The hubs are in **East Asia + Southeast Asia**, and the control plane is in East Asia.
+That was the user's choice, to avoid capacity contention: UK South lists **no VM sizes at
+all** for this subscription. The tfstate account stays in UK South. Evidence and a
+fallback (Korea Central) are in `docs/design.md#regions`.
+
 ## ⚠ Most address-plan edits are destructive
 
 - IPAM pool `name`, `location`, `parent_pool_name` and `address_prefixes` are **ForceNew**,

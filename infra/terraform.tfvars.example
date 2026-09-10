@@ -4,20 +4,24 @@
 # ForceNew. Read docs/design.md before changing a prefix or a region key.
 
 name_prefix = "scandula"
-location    = "uksouth" # control plane: RGs, network manager, root pool, vWAN, firewall policy
+location    = "eastasia" # control plane: RGs, network manager, root pool, vWAN, firewall policy
 
 ipam_root_prefix = "10.64.0.0/12" # 10.64.0.0 – 10.79.255.255
 
 # Each region gets an IPAM pool, and — when secured_vwan_enabled — a secured hub on
 # hub_address_prefix, which is reserved in that pool either way.
+#
+# East Asia + Southeast Asia: an Azure region pair, both with availability zones.
+# Chosen to avoid capacity contention: UK South exposes no VM sizes at all to the
+# Visual Studio subscription. See docs/design.md#regions.
 regions = {
-  uks = {
-    location           = "uksouth"
+  eas = {
+    location           = "eastasia"
     address_prefix     = "10.64.0.0/14"
     hub_address_prefix = "10.64.0.0/23"
   }
-  ukw = {
-    location           = "ukwest"
+  sea = {
+    location           = "southeastasia"
     address_prefix     = "10.68.0.0/14"
     hub_address_prefix = "10.68.0.0/23"
   }

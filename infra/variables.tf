@@ -19,7 +19,7 @@ variable "name_prefix" {
 variable "location" {
   description = "Region for the control plane: its resource groups, the network manager, the root IPAM pool, the Virtual WAN and the firewall policy. Changing it replaces them."
   type        = string
-  default     = "uksouth"
+  default     = "eastasia"
 }
 
 variable "tags" {

@@ -4,25 +4,25 @@
 
 ```mermaid
 flowchart TB
-  subgraph cp["rg-scandula-connectivity · avnm-scandula (IPAM)"]
+  subgraph cp["rg-scandula-connectivity · avnm-scandula (IPAM) · eastasia"]
     root["IPAM root pool<br/>10.64.0.0/12"]
-    uksPool["region pool uks<br/>10.64.0.0/14"]
-    ukwPool["region pool ukw<br/>10.68.0.0/14"]
-    root --> uksPool
-    root --> ukwPool
+    easPool["region pool eas<br/>10.64.0.0/14"]
+    seaPool["region pool sea<br/>10.68.0.0/14"]
+    root --> easPool
+    root --> seaPool
   end
 
   subgraph vwan["vwan-scandula (Standard) · only when secured_vwan_enabled"]
-    hubUks["vhub-scandula-uks<br/>10.64.0.0/23<br/>+ afw-scandula-uks (Basic)"]
-    hubUkw["vhub-scandula-ukw<br/>10.68.0.0/23<br/>+ afw-scandula-ukw (Basic)"]
-    hubUks <== "hub-to-hub, via both firewalls" ==> hubUkw
+    hubEas["vhub-scandula-eas · East Asia<br/>10.64.0.0/23<br/>+ afw-scandula-eas (Basic)"]
+    hubSea["vhub-scandula-sea · Southeast Asia<br/>10.68.0.0/23<br/>+ afw-scandula-sea (Basic)"]
+    hubEas <== "hub-to-hub, via both firewalls" ==> hubSea
   end
 
-  uksPool -. "static CIDR reservation" .-> hubUks
-  ukwPool -. "static CIDR reservation" .-> hubUkw
+  easPool -. "static CIDR reservation" .-> hubEas
+  seaPool -. "static CIDR reservation" .-> hubSea
 
-  spokesUks["spokes in uksouth<br/>(IPAM-allocated from uks pool,<br/>hub connection in their own repo)"] --> hubUks
-  spokesUkw["spokes in ukwest"] --> hubUkw
+  spokesEas["spokes in eastasia<br/>(IPAM-allocated from eas pool,<br/>hub connection in their own repo)"] --> hubEas
+  spokesSea["spokes in southeastasia"] --> hubSea
 ```
 
 - **IPAM owns the address plan.** Spokes allocate from their region's pool (the
@@ -55,8 +55,9 @@ Azure retail prices (USD, `prices.azure.com`, checked 2026-09-10):
 | Extra routing infrastructure unit, if the hub router scales up | $0.10 / hour |
 
 **Per secured hub: $0.645/h, about $470/month. Two hubs: about $942/month**, before
-data. That's the same in every commercial region; only the US Government regions cost
-more. Firewall Standard would take two hubs to about $2,190/month.
+data. That's the same in every commercial region, East and Southeast Asia included;
+only the US Government regions cost more. Firewall Standard would take two hubs to about
+$2,190/month.
 
 That is why **`secured_vwan_enabled` defaults to false**. The bootstrap subscription is
 a Visual Studio credit subscription ($50/month, spending limit on). Two hubs would use
@@ -71,10 +72,10 @@ DNS forwarder for its spokes. Use a DNS Private Resolver for that when it's need
 | Block | Use |
 |-------|-----|
 | `10.64.0.0/12` | IPAM root: all Azure space (10.64.0.0 – 10.79.255.255) |
-| `10.64.0.0/14` | `uks` region pool: its hub reservation and uksouth spokes |
-| `10.64.0.0/23` | `uks` vWAN hub (reserved static CIDR) |
-| `10.68.0.0/14` | `ukw` region pool: its hub reservation and ukwest spokes |
-| `10.68.0.0/23` | `ukw` vWAN hub (reserved static CIDR) |
+| `10.64.0.0/14` | `eas` region pool (East Asia): its hub reservation and eastasia spokes |
+| `10.64.0.0/23` | `eas` vWAN hub (reserved static CIDR) |
+| `10.68.0.0/14` | `sea` region pool (Southeast Asia): its hub reservation and southeastasia spokes |
+| `10.68.0.0/23` | `sea` vWAN hub (reserved static CIDR) |
 | `10.72.0.0/14` | unallocated, for a third region |
 | `10.76.0.0/14` | unallocated. The end of it (e.g. `10.79.255.0/24`) is a good `root_static_cidrs` home for a P2S client pool |
 
@@ -88,17 +89,29 @@ things a site-to-site VPN might one day have to route around.
 
 ## Regions
 
-The region keys and locations are just tfvars entries. The examples use UK South and UK
-West. Region choice **doesn't change the price** (see Cost), only latency, availability
-zones and capacity. As of 2026-09-10:
+**East Asia (`eas`) + Southeast Asia (`sea`)**, chosen 2026-09-10 to avoid capacity
+contention. They're an Azure region pair, and both have availability zones. The control
+plane (`location`) is in East Asia too. The tfstate account stays in UK South, where
+bootstrap put it; storage there works fine.
 
-| Pair | Both have AZs | Notes |
-|------|---------------|-------|
-| UK South / UK West | no (UK West has none) | closest to the UK; UK West is "Other" category |
-| Southeast Asia / East Asia | yes | both "Recommended" |
-| Japan East / Japan West | yes | both "Recommended" |
-| Korea Central / Korea South | no | Korea South is "Other" |
-| Central India / South India | no | South India is "Other" |
+Price didn't decide it: a secured hub costs the same in every commercial region.
+Contention did. The best read-only signal is how many VM sizes Azure marks
+`NotAvailableForSubscription` for the Visual Studio subscription. Azure Firewall runs on
+managed compute, so compute access is a fair proxy, though not proof.
+
+| Region | VM sizes blocked for this subscription | AZs |
+|--------|----------------------------------------|-----|
+| UK South | **all: it lists 0 sizes** | yes |
+| UK West | **all: it lists 0 sizes** | no |
+| East Asia | 27 of 802 (zone-level only) | yes |
+| Korea Central | 138 of 758 | yes |
+| Japan East | 514 of 1012 | yes |
+| Southeast Asia | 592 of 1024 | yes |
+
+Network quotas (public IPs, VNets) were identical in every region checked, so the
+difference is compute access, not networking. Southeast Asia is the more restricted of
+the pair. If a hub or firewall ever fails to deploy there with a capacity error, Korea
+Central is the next least restricted.
 
 ## Not here yet (deliberately)
 
@@ -106,7 +119,8 @@ Each is a follow-up PR, not something this pretends to have:
 
 - **Firewall rules.** The policy is empty, so everything crossing a hub is denied.
 - **Firewall diagnostics** to a Log Analytics workspace (that has its own cost).
-- **VPN gateway in a hub**, for a site-to-site tunnel to the homelab.
+- **VPN gateway in a hub**, for a site-to-site tunnel to the homelab. From Asia that's
+  a long round trip to the UK.
 - **DNS Private Resolver**, for private endpoints and conditional forwarding to
   `*.mocridhe.co.uk`. Firewall Basic can't proxy DNS.
 - **Spokes.** They live in their workload repos: allocate from the region pool, attach
