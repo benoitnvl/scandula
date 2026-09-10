@@ -47,8 +47,8 @@ resource "azurerm_virtual_hub" "this" {
   depends_on = [azurerm_network_manager_ipam_pool_static_cidr.hub]
 }
 
-# One policy for every hub. It has no rules yet, and Azure Firewall denies by
-# default, so with routing intent on nothing crosses a hub until rules are added.
+# One policy for every hub. Its rules are in firewall-rules.tf; anything they don't
+# allow is denied, because Azure Firewall denies by default.
 resource "azurerm_firewall_policy" "this" {
   count = var.secured_vwan_enabled ? 1 : 0
 

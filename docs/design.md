@@ -36,11 +36,32 @@ flowchart TB
 - **Every hub is secured.** An Azure Firewall (`AZFW_Hub`) sits in each hub, and
   **routing intent** sends both internet and private traffic through it. With private
   routing intent on both hubs, spoke-to-spoke and hub-to-hub traffic cross the
-  firewalls. The shared policy `afwp-scandula` has no rules yet, and Azure Firewall
-  denies by default, so nothing crosses a hub until rule collection groups are added.
+  firewalls. The shared policy `afwp-scandula` carries one baseline rule collection
+  group (see Firewall rules below); anything it doesn't allow is denied.
 - **Why not AVNM for connectivity any more:** a vWAN hub can't be in an AVNM network
   group. An AVNM hub-and-spoke config with a vWAN hub as the hub is preview, and it
   needs a vWAN *connection policy* that azurerm 5.4 can't set.
+
+## Firewall rules
+
+`infra/firewall-rules.tf` puts one rule collection group, `rcg-baseline` (priority
+1000), on the shared policy. It's the baseline chosen on 2026-09-10:
+
+| Collection | Type | Allows |
+|------------|------|--------|
+| `allow-spoke-to-spoke` (1100) | network | any protocol and port, from `ipam_root_prefix` to `ipam_root_prefix` |
+| `allow-outbound-web` (1200) | application | HTTP 80 and HTTPS 443, from `ipam_root_prefix` to any FQDN |
+
+Everything else is denied, which is Azure Firewall's default, and there's no inbound
+DNAT. Both rules follow `ipam_root_prefix`, so every spoke IPAM hands out is covered
+without being listed, in either region.
+
+The web rule is an *application* rule because Firewall Basic filters FQDNs only at the
+application level (SNI for HTTPS). Network-level FQDN rules need the firewall's DNS
+proxy, and Basic doesn't have one. Threat intelligence on Basic is alert-only.
+
+Anything beyond this baseline, such as a specific port out, DNAT in, or on-premises
+ranges once `reserved_prefixes` is set, goes in its own rule collection group.
 
 ## Cost
 
@@ -117,7 +138,6 @@ Central is the next least restricted.
 
 Each is a follow-up PR, not something this pretends to have:
 
-- **Firewall rules.** The policy is empty, so everything crossing a hub is denied.
 - **Firewall diagnostics** to a Log Analytics workspace (that has its own cost).
 - **VPN / ExpressRoute gateway in a hub**, for on-premises connectivity. Set
   `reserved_prefixes` to the on-prem ranges first.
