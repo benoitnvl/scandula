@@ -27,7 +27,8 @@ hub**, see [docs/design.md](docs/design.md#cost)):
 | Resource group | `rg-scandula-vwan` | in `var.location` |
 | Virtual WAN | `vwan-scandula` | Standard (Basic can't host a firewall) |
 | Virtual hub | `vhub-scandula-<region>` | Standard, on `hub_address_prefix` |
-| Firewall policy | `afwp-scandula` | shared by every hub; no rules yet, so default deny |
+| Firewall policy | `afwp-scandula` | shared by every hub |
+| Rule collection group | `rcg-baseline` | spoke↔spoke inside the root prefix + outbound HTTP/HTTPS; everything else denied |
 | Azure Firewall | `afw-scandula-<region>` | `AZFW_Hub`, tier `firewall_sku_tier` (default **Basic**) |
 | Routing intent | `ri-scandula-<region>` | internet **and** private traffic through that hub's firewall |
 
@@ -42,6 +43,7 @@ infra/
   main.tf            control-plane resource group, network manager
   ipam.tf            root pool, region pools, hub reservations, static CIDRs
   vwan.tf            vWAN, hubs, firewall policy, hub firewalls, routing intent (gated)
+  firewall-rules.tf  baseline rule collection group on the shared policy (gated)
   outputs.tf         pool ids, hub ids + firewall IPs, policy id
   tests/             terraform test — mocked azurerm, no credentials
   backend.hcl.example

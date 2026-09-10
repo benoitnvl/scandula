@@ -52,7 +52,9 @@ Standard vWAN meshes its hubs itself, and spokes attach with
 here: a vWAN hub can't join a network group, and an AVNM hub-and-spoke config with a vWAN
 hub is preview and needs a vWAN connection policy that azurerm 5.4 can't set. Routing
 intent sends private **and** internet traffic through each hub's firewall. The shared
-policy has no rules yet, so everything crossing a hub is denied until rules are added.
+policy's baseline (`firewall-rules.tf`) allows spoke↔spoke inside the root prefix and
+outbound HTTP/HTTPS; everything else is denied. Loosening it is a deliberate, reviewed
+change, and the tests pin its shape.
 
 ## State, CI, and the one write path
 
