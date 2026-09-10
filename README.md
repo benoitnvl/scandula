@@ -1,19 +1,11 @@
 # scandula
 
-Terraform for the estate's **Azure connectivity core**: a **secured Virtual WAN**
-(one Standard hub per region, each with an Azure Firewall and routing intent), with
-the address plan owned by **Azure Virtual Network Manager (AVNM) IPAM**.
+Terraform for Aberdeen's **Azure connectivity core**: a **secured Virtual WAN** (one
+Standard hub per region, each with an Azure Firewall and routing intent), with the
+address plan owned by **Azure Virtual Network Manager (AVNM) IPAM**.
 
-One platform, one repo, like the rest of the estate:
-
-| Repo | Platform | Provisions |
-|------|----------|-----------|
-| `bonifaziu` | Proxmox host | VMs + LXCs |
-| `torra` | on-prem Talos k8s | app workloads (Flux) |
-| `nonza` | DMZ Debian box | Caddy edge |
-| `stazzona` | Talos VM on bonifaziu | CI runners (ARC) |
-| `Mortella` | UniFi UDM | VLANs, DNS, firewall |
-| **`scandula`** | **Azure** | **secured vWAN hubs, AVNM IPAM** |
+This is an Aberdeen project. It isn't part of the benoitnvl homelab estate and shares
+nothing with it: no address space, DNS or connectivity.
 
 ## What it builds
 

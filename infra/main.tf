@@ -11,7 +11,7 @@ resource "azurerm_network_manager" "this" {
   name                = "avnm-${var.name_prefix}"
   location            = var.location
   resource_group_name = azurerm_resource_group.connectivity.name
-  description         = "IPAM for the Azure estate, managed from benoitnvl/scandula."
+  description         = "IPAM for the Azure hub network, managed from benoitnvl/scandula."
   scope_accesses      = var.scope_accesses
   tags                = local.tags
 

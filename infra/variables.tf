@@ -87,9 +87,9 @@ variable "scope_accesses" {
 }
 
 variable "reserved_prefixes" {
-  description = "Address space in use outside Azure that the IPAM root must never overlap. Defaults to the homelab LAN, which a site-to-site VPN would route to."
+  description = "Address space in use outside Azure (on-premises, other clouds) that the IPAM root must never overlap: whatever a site-to-site VPN or ExpressRoute will route to. Empty by default; fill it in before connecting anything on-prem."
   type        = list(string)
-  default     = ["10.1.0.0/23"]
+  default     = []
 
   validation {
     condition     = alltrue([for r in var.reserved_prefixes : can(cidrhost(r, 0))])
@@ -114,7 +114,7 @@ variable "ipam_root_prefix" {
       cidrsubnet(format("%s/%d", cidrhost(r, 0), min(tonumber(split("/", r)[1]), tonumber(split("/", var.ipam_root_prefix)[1]))), 0, 0) ==
       cidrsubnet(format("%s/%d", cidrhost(var.ipam_root_prefix, 0), min(tonumber(split("/", r)[1]), tonumber(split("/", var.ipam_root_prefix)[1]))), 0, 0),
     false)])
-    error_message = "ipam_root_prefix overlaps one of reserved_prefixes (the homelab LAN, by default)."
+    error_message = "ipam_root_prefix overlaps one of reserved_prefixes."
   }
 }
 

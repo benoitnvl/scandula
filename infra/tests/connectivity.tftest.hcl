@@ -185,12 +185,12 @@ run "management_group_scope_is_passed_through" {
 
   variables {
     network_manager_scope = {
-      management_group_ids = ["/providers/Microsoft.Management/managementGroups/nuvulu"]
+      management_group_ids = ["/providers/Microsoft.Management/managementGroups/platform"]
     }
   }
 
   assert {
-    condition     = toset(one(azurerm_network_manager.this.scope).management_group_ids) == toset(["/providers/Microsoft.Management/managementGroups/nuvulu"])
+    condition     = toset(one(azurerm_network_manager.this.scope).management_group_ids) == toset(["/providers/Microsoft.Management/managementGroups/platform"])
     error_message = "An explicit management-group scope should reach the network manager."
   }
 }
@@ -301,10 +301,11 @@ run "rejects_an_unknown_firewall_tier" {
   expect_failures = [var.firewall_sku_tier]
 }
 
-run "rejects_a_root_that_overlaps_the_homelab" {
+run "rejects_a_root_that_overlaps_a_reserved_prefix" {
   command = plan
   variables {
-    ipam_root_prefix = "10.0.0.0/8"
+    reserved_prefixes = ["10.1.0.0/23"] # a sample on-prem range; the default is empty
+    ipam_root_prefix  = "10.0.0.0/8"
   }
   expect_failures = [var.ipam_root_prefix]
 }
@@ -344,7 +345,7 @@ run "rejects_a_short_subscription_id" {
 run "rejects_a_short_management_group_id" {
   command = plan
   variables {
-    network_manager_scope = { management_group_ids = ["nuvulu"] }
+    network_manager_scope = { management_group_ids = ["platform"] }
   }
   expect_failures = [var.network_manager_scope]
 }
