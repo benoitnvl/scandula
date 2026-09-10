@@ -32,8 +32,10 @@ enforces that.
 
 - State lives in Azure Storage (`backend "azurerm" {}` + gitignored `infra/backend.hcl`),
   locked by blob lease — so unlike bonifaziu, a second checkout is not a second writer.
-- CI (`runs-on: stazzona`) runs fmt, validate, test and trivy with `init -backend=false`,
-  and **never authenticates to Azure**. `make plan` → `make apply` (which applies that
+- CI runs fmt, validate, test and trivy with `init -backend=false`, and **never
+  authenticates to Azure**. It's on GitHub-hosted `ubuntu-latest`, **not stazzona**:
+  benoitnvl is a user account, so self-hosted runners are per-repo, and stazzona has no
+  scale set for scandula. `runs-on: stazzona` queues forever; PR #1 found that out. `make plan` → `make apply` (which applies that
   saved plan) from a workstation is the only write path.
 - `.terraform.lock.hcl` must be produced by **terraform** (`make lock`), never tofu — a
   tofu lock file records `registry.opentofu.org` and is useless here. It isn't committed

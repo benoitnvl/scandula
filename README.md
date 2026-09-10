@@ -78,6 +78,6 @@ make init-local && make test
 checks what gets built (pools, hubs, which configs each region commits) and that
 every CIDR validation rejects what it should.
 
-CI (`runs-on: stazzona`) runs `terraform fmt -check`, `validate`, `test` and a trivy
-misconfig + secret scan on every PR. **CI never touches Azure.** `make apply` from a
+CI (GitHub-hosted `ubuntu-latest`: stazzona has no runner scale set for this repo) runs
+`terraform fmt -check`, `validate`, `test` and a trivy misconfig + secret scan on every PR. **CI never touches Azure.** `make apply` from a
 workstation is the only write path.

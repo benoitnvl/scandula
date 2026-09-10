@@ -18,21 +18,25 @@ env:
   TF_VERSION: 1.16.2
   TF_IN_AUTOMATION: "1"
 
+# GitHub-hosted, NOT stazzona. benoitnvl is a user account, so self-hosted
+# runners are per-repo, and stazzona only has scale sets for caledrix, bonifaziu
+# and torra. `runs-on: stazzona` here just sits queued forever — PR #1 did. Same
+# choice as estate-docs and Mortella. Moving over means a repo-scoped scale set
+# in benoitnvl/stazzona first (see its arc/values/).
+#
 # CI never touches Azure: no credentials, `init -backend=false`, and the tests run
-# `plan` against a mocked azurerm provider. `make plan/apply` from a workstation is
-# the only write path.
+# against a mocked azurerm provider. `make plan/apply` from a workstation is the
+# only write path.
 jobs:
   fmt:
     name: terraform fmt
-    runs-on: stazzona
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
-          # The stazzona self-hosted runner has no node on PATH, and the default
-          # wrapper shims `terraform` with a node script (`env: node: not found`).
-          # We don't use the wrapper's step outputs, so disable it.
+          # We don't use the wrapper's step outputs; plain terraform keeps logs clean.
           terraform_wrapper: false
       - name: fmt check (recursive)
         run: terraform fmt -check -recursive
@@ -40,7 +44,7 @@ jobs:
 
   validate-test:
     name: terraform validate + test
-    runs-on: stazzona
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -53,13 +57,13 @@ jobs:
       - name: terraform validate
         working-directory: infra
         run: terraform validate
-      - name: terraform test (mocked azurerm, plan only)
+      - name: terraform test (mocked azurerm)
         working-directory: infra
         run: terraform test
 
   trivy:
     name: trivy
-    runs-on: stazzona
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       # IaC-misconfig + secret scan. Blocks on HIGH/CRITICAL; add a `.trivyignore`
