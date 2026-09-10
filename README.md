@@ -7,6 +7,12 @@ address plan owned by **Azure Virtual Network Manager (AVNM) IPAM**.
 This is an Aberdeen project. It isn't part of the benoitnvl homelab estate and shares
 nothing with it: no address space, DNS or connectivity.
 
+![scandula architecture: AVNM IPAM pools, and a secured Virtual WAN with hubs in East Asia and Southeast Asia, each with an Azure Firewall, routing intent and the shared baseline policy](docs/diagrams/architecture.svg)
+
+Source: [`docs/diagrams/architecture.drawio`](docs/diagrams/architecture.drawio). Edit it in
+draw.io, then run `make diagram` to re-export the SVG. The SVG embeds the diagram, so it
+also opens directly in draw.io.
+
 ## What it builds
 
 Always:
