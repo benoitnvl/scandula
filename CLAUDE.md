@@ -6,6 +6,11 @@ address plan in AVNM IPAM pools. `README.md` has the layout, `docs/design.md` th
 topology, address plan and cost. This file is what you need in order not to break
 things.
 
+**This is an Aberdeen project, not part of the benoitnvl homelab estate.** Don't link it
+to the estate: no homelab ranges, no `mocridhe.co.uk` DNS, no estate repos or docs. The
+repo lives under benoitnvl, which is the only reason stazzona comes up at all (see CI
+below).
+
 ## ⚠ The secured vWAN costs real money, so it's off by default
 
 `secured_vwan_enabled` defaults to **false**, and `tests/` asserts that nothing billable
@@ -37,7 +42,8 @@ A vWAN hub isn't a VNet, so it can't take an `ip_address_pool` allocation. Each 
 `hub_address_prefix` is written in tfvars and **reserved as a static CIDR** in that
 region's pool (always, even with the hubs off), so IPAM never hands it to a spoke.
 Validations keep it canonical, /24 or larger, and inside its own region pool. The root
-pool must never overlap `reserved_prefixes` (the homelab LAN, `10.1.0.0/23`).
+pool must never overlap `reserved_prefixes`: on-premises ranges, empty until someone sets
+them.
 
 ## Connectivity is Virtual WAN's, not AVNM's
 
@@ -51,7 +57,7 @@ policy has no rules yet, so everything crossing a hub is denied until rules are 
 ## State, CI, and the one write path
 
 - State lives in Azure Storage (`backend "azurerm" {}` + gitignored `infra/backend.hcl`),
-  locked by blob lease — so unlike bonifaziu, a second checkout is not a second writer.
+  locked by blob lease, so a second checkout is not a second writer.
 - CI runs fmt, validate, test and trivy with `init -backend=false`, and **never
   authenticates to Azure**. It's on GitHub-hosted `ubuntu-latest`, **not stazzona**:
   benoitnvl is a user account, so self-hosted runners are per-repo, and stazzona has no

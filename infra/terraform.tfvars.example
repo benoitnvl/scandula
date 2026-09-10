@@ -8,6 +8,10 @@ location    = "eastasia" # control plane: RGs, network manager, root pool, vWAN,
 
 ipam_root_prefix = "10.64.0.0/12" # 10.64.0.0 – 10.79.255.255
 
+# On-premises ranges the root must never overlap. Empty by default; fill in before
+# connecting anything over VPN or ExpressRoute.
+# reserved_prefixes = ["192.168.0.0/16"]
+
 # Each region gets an IPAM pool, and — when secured_vwan_enabled — a secured hub on
 # hub_address_prefix, which is reserved in that pool either way.
 #

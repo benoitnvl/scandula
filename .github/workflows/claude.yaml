@@ -58,7 +58,7 @@ jobs:
               - anything that makes hourly-billed resources plan while
                 secured_vwan_enabled is false, or flips its default to true;
               - hub_address_prefix ranges not reserved as static CIDRs in their region
-                pool, or overlapping the homelab (10.1.0.0/23);
+                pool, or overlapping reserved_prefixes (on-premises ranges);
               - any change that forces replacement of an IPAM pool, virtual hub,
                 firewall or network manager (name, location, prefixes); call it out
                 loudly, because replacing a hub drops its spoke connections;

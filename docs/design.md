@@ -82,10 +82,10 @@ DNS forwarder for its spokes. Use a DNS Private Resolver for that when it's need
 A hub gets a /23 because Azure recommends it (the minimum is /24), and it sits at the
 start of its region pool so the rest of the /14 is one contiguous block for spokes.
 
-Why `10.64.0.0/12`: it stays clear of the homelab LAN (`10.1.0.0/23`, enforced by
-`reserved_prefixes`), of Azure's own `10.0.0.0/16` default, and of the Kubernetes
-default pod and service ranges (`10.244.0.0/16`, `10.96.0.0/12`). All of those are
-things a site-to-site VPN might one day have to route around.
+Why `10.64.0.0/12`: it stays clear of Azure's own `10.0.0.0/16` default and of the
+Kubernetes default pod and service ranges (`10.244.0.0/16`, `10.96.0.0/12`). Before
+anything on-premises is connected, put its ranges in `reserved_prefixes` (empty by
+default); a validation then keeps the root clear of them.
 
 ## Regions
 
@@ -119,10 +119,10 @@ Each is a follow-up PR, not something this pretends to have:
 
 - **Firewall rules.** The policy is empty, so everything crossing a hub is denied.
 - **Firewall diagnostics** to a Log Analytics workspace (that has its own cost).
-- **VPN gateway in a hub**, for a site-to-site tunnel to the homelab. From Asia that's
-  a long round trip to the UK.
+- **VPN / ExpressRoute gateway in a hub**, for on-premises connectivity. Set
+  `reserved_prefixes` to the on-prem ranges first.
 - **DNS Private Resolver**, for private endpoints and conditional forwarding to
-  `*.mocridhe.co.uk`. Firewall Basic can't proxy DNS.
+  on-premises DNS. Firewall Basic can't proxy DNS.
 - **Spokes.** They live in their workload repos: allocate from the region pool, attach
   with `azurerm_virtual_hub_connection`.
 - **A plan job in CI** over OIDC (see docs/bootstrap.md).

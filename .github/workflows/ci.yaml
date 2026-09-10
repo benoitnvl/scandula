@@ -18,11 +18,10 @@ env:
   TF_VERSION: 1.16.2
   TF_IN_AUTOMATION: "1"
 
-# GitHub-hosted, NOT stazzona. benoitnvl is a user account, so self-hosted
-# runners are per-repo, and stazzona only has scale sets for caledrix, bonifaziu
-# and torra. `runs-on: stazzona` here just sits queued forever — PR #1 did. Same
-# choice as estate-docs and Mortella. Moving over means a repo-scoped scale set
-# in benoitnvl/stazzona first (see its arc/values/).
+# GitHub-hosted, NOT stazzona (the benoitnvl account's self-hosted runners).
+# benoitnvl is a user account, so self-hosted runners are per-repo, and there's
+# no scale set for this repo: `runs-on: stazzona` just sits queued forever. PR #1
+# did.
 #
 # CI never touches Azure: no credentials, `init -backend=false`, and the tests run
 # against a mocked azurerm provider. `make plan/apply` from a workstation is the
