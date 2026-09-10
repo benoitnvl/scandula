@@ -5,14 +5,13 @@
 #
 # What the mocks can and can't prove — read this before trusting a green run:
 #
-#   - azurerm still validates ID *format* on attributes like network_manager_id
-#     even when mocked, so every referenced type gets a realistic default id.
+#   - azurerm still validates ID *format* on attributes like virtual_hub_id even
+#     when mocked, so every referenced type gets a realistic default id.
 #   - Mock ids are per resource *type*, and override_resource can't target an
-#     instance like region["uks"]. So uks and ukw share ids: per-region wiring
-#     is proven through names and locations (which differ), never through ids.
-#   - Resource blocks we need to tell apart get their own override below: the
-#     root pool vs the region pools, the hub mesh vs the hub-and-spoke configs,
-#     ng-hubs vs the spoke groups. Those id comparisons are meaningful.
+#     instance like region["uks"]. So uks and ukw share ids: per-region wiring is
+#     proven through names, locations and prefixes (which differ), never ids.
+#   - Resource blocks we need to tell apart get their own override below (the
+#     root pool vs the region pools). That id comparison is meaningful.
 #
 # Every validation in variables.tf has a rejection run at the bottom, and
 # `make mutants` proves each one is caught by the validation it's named for, not
@@ -36,17 +35,17 @@ mock_provider "azurerm" {
   mock_resource "azurerm_network_manager_ipam_pool" {
     defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.Network/networkManagers/avnm-mock/ipamPools/ipam-region" }
   }
-  mock_resource "azurerm_network_manager_network_group" {
-    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.Network/networkManagers/avnm-mock/networkGroups/ng-spokes" }
+  mock_resource "azurerm_virtual_wan" {
+    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.Network/virtualWans/vwan-mock" }
   }
-  mock_resource "azurerm_network_manager_connectivity_configuration" {
-    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.Network/networkManagers/avnm-mock/connectivityConfigurations/cc-hubspoke" }
+  mock_resource "azurerm_virtual_hub" {
+    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.Network/virtualHubs/vhub-mock" }
   }
-  mock_resource "azurerm_virtual_network" {
-    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.Network/virtualNetworks/vnet-hub" }
+  mock_resource "azurerm_firewall_policy" {
+    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.Network/firewallPolicies/afwp-mock" }
   }
-  mock_resource "azurerm_subnet" {
-    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.Network/virtualNetworks/vnet-hub/subnets/snet" }
+  mock_resource "azurerm_firewall" {
+    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.Network/azureFirewalls/afw-mock" }
   }
 }
 
@@ -55,152 +54,129 @@ override_resource {
   values = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.Network/networkManagers/avnm-mock/ipamPools/ipam-root" }
 }
 
-override_resource {
-  target = azurerm_network_manager_network_group.hubs
-  values = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.Network/networkManagers/avnm-mock/networkGroups/ng-hubs" }
-}
-
-override_resource {
-  target = azurerm_network_manager_connectivity_configuration.hub_mesh
-  values = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.Network/networkManagers/avnm-mock/connectivityConfigurations/cc-hub-mesh" }
-}
-
 variables {
   regions = {
-    uks = { location = "uksouth", address_prefix = "10.64.0.0/14" }
-    ukw = { location = "ukwest", address_prefix = "10.68.0.0/14" }
+    uks = { location = "uksouth", address_prefix = "10.64.0.0/14", hub_address_prefix = "10.64.0.0/23" }
+    ukw = { location = "ukwest", address_prefix = "10.68.0.0/14", hub_address_prefix = "10.68.0.0/23" }
   }
 }
 
-# --- what gets built --------------------------------------------------------
+# --- the cost guard ----------------------------------------------------------
 
-run "two_regions_get_pools_hubs_and_a_hub_mesh" {
+run "secured_vwan_is_off_by_default" {
   command = apply
-
-  assert {
-    condition     = length(azurerm_virtual_network.hub) == 2 && length(azurerm_network_manager_ipam_pool.region) == 2
-    error_message = "Expected one hub VNet and one region pool per region."
-  }
-
-  assert {
-    condition = alltrue([for k, p in azurerm_network_manager_ipam_pool.region :
-      p.parent_pool_name == azurerm_network_manager_ipam_pool.root.name &&
-      p.location == var.regions[k].location &&
-      p.address_prefixes == tolist([var.regions[k].address_prefix])
-    ])
-    error_message = "Each region pool must be a child of the root pool, in its own region, with its own prefix."
-  }
-
-  assert {
-    condition = alltrue([for k, v in azurerm_virtual_network.hub :
-      v.location == var.regions[k].location &&
-      one(v.ip_address_pool).id == azurerm_network_manager_ipam_pool.region[k].id &&
-      one(v.ip_address_pool).id != azurerm_network_manager_ipam_pool.root.id &&
-      one(v.ip_address_pool).number_of_ip_addresses == "1024"
-    ])
-    error_message = "Each hub must sit in its region and take 1024 addresses from a region pool — never the root."
-  }
-
-  assert {
-    condition = length(azurerm_subnet.hub) == 8 && alltrue([for k, s in azurerm_subnet.hub :
-      s.virtual_network_name == azurerm_virtual_network.hub[split(".", k)[0]].name &&
-      s.resource_group_name == azurerm_resource_group.hub[split(".", k)[0]].name &&
-      one(s.ip_address_pool).id == azurerm_network_manager_ipam_pool.region[split(".", k)[0]].id &&
-      one(s.ip_address_pool).id != azurerm_network_manager_ipam_pool.root.id
-    ])
-    error_message = "Expected the four default subnets in each hub, allocated from a region pool."
-  }
-
-  assert {
-    condition = alltrue([for k, c in azurerm_network_manager_connectivity_configuration.hub_and_spoke :
-      c.name == "cc-hubspoke-${k}" &&
-      one(c.hub).resource_id == azurerm_virtual_network.hub[k].id &&
-      one(c.applies_to_group).network_group_id == azurerm_network_manager_network_group.spokes[k].id &&
-      one(c.applies_to_group).network_group_id != azurerm_network_manager_network_group.hubs[0].id &&
-      one(c.applies_to_group).group_connectivity == "None"
-    ])
-    error_message = "Each hub-and-spoke config must apply to a spokes group (not ng-hubs), with no direct spoke-to-spoke links."
-  }
 
   assert {
     condition = (
-      length(azurerm_network_manager_connectivity_configuration.hub_mesh) == 1 &&
-      length(azurerm_network_manager_static_member.hub) == 2 &&
-      alltrue([for m in azurerm_network_manager_static_member.hub : m.network_group_id == azurerm_network_manager_network_group.hubs[0].id]) &&
-      one(azurerm_network_manager_connectivity_configuration.hub_mesh[0].applies_to_group).network_group_id == azurerm_network_manager_network_group.hubs[0].id
+      length(azurerm_virtual_wan.this) == 0 &&
+      length(azurerm_virtual_hub.this) == 0 &&
+      length(azurerm_firewall.hub) == 0 &&
+      length(azurerm_firewall_policy.this) == 0 &&
+      length(azurerm_virtual_hub_routing_intent.this) == 0 &&
+      length(azurerm_resource_group.vwan) == 0
     )
-    error_message = "Both hubs should be static members of ng-hubs, and the mesh should apply to that group."
+    error_message = "With secured_vwan_enabled unset, nothing billable by the hour may be planned."
   }
 
   assert {
-    condition = alltrue([for k, d in azurerm_network_manager_deployment.connectivity :
-      d.location == var.regions[k].location &&
-      length(d.configuration_ids) == 2 &&
-      toset(d.configuration_ids) == toset([
-        azurerm_network_manager_connectivity_configuration.hub_and_spoke[k].id,
-        azurerm_network_manager_connectivity_configuration.hub_mesh[0].id,
-      ])
+    condition     = output.virtual_wan_id == null && length(output.virtual_hubs) == 0
+    error_message = "Outputs must say plainly that there is no vWAN."
+  }
+
+  assert {
+    condition = length(azurerm_network_manager_ipam_pool.region) == 2 && alltrue([for k, c in azurerm_network_manager_ipam_pool_static_cidr.hub :
+      c.address_prefixes == tolist([var.regions[k].hub_address_prefix]) &&
+      c.ipam_pool_id == azurerm_network_manager_ipam_pool.region[k].id &&
+      c.ipam_pool_id != azurerm_network_manager_ipam_pool.root.id
     ])
-    error_message = "Each region must commit a hub-and-spoke config plus the hub mesh — nothing else."
-  }
-
-  assert {
-    condition     = toset(one(azurerm_network_manager.this.scope).subscription_ids) == toset(["/subscriptions/00000000-0000-0000-0000-000000000000"])
-    error_message = "An empty network_manager_scope should default to the current subscription."
-  }
-
-  assert {
-    condition     = azurerm_virtual_network.hub["uks"].tags["repo"] == "benoitnvl/scandula"
-    error_message = "Default tags should be applied."
+    error_message = "IPAM and the hub reservations must exist even while the hubs are off, reserved on the region pools."
   }
 }
 
-run "one_region_has_no_hub_mesh" {
+# --- what gets built when it's on ---------------------------------------------
+
+run "enabled_builds_a_secured_hub_per_region" {
   command = apply
 
   variables {
+    secured_vwan_enabled = true
+  }
+
+  assert {
+    condition     = one(azurerm_virtual_wan.this[*].type) == "Standard"
+    error_message = "Secured hubs need a Standard vWAN (Basic is site-to-site VPN only)."
+  }
+
+  assert {
+    condition = length(azurerm_virtual_hub.this) == 2 && alltrue([for k, h in azurerm_virtual_hub.this :
+      h.sku == "Standard" &&
+      h.location == var.regions[k].location &&
+      h.address_prefix == var.regions[k].hub_address_prefix &&
+      h.name == "vhub-scandula-${k}" &&
+      h.virtual_wan_id == azurerm_virtual_wan.this[0].id
+    ])
+    error_message = "Each region needs a Standard hub in its own location, on its reserved prefix, in the one vWAN."
+  }
+
+  assert {
+    condition = length(azurerm_firewall.hub) == 2 && alltrue([for k, f in azurerm_firewall.hub :
+      f.sku_name == "AZFW_Hub" &&
+      f.sku_tier == "Basic" &&
+      f.location == var.regions[k].location &&
+      f.name == "afw-scandula-${k}" &&
+      f.firewall_policy_id == azurerm_firewall_policy.this[0].id &&
+      one(f.virtual_hub).virtual_hub_id == azurerm_virtual_hub.this[k].id
+    ])
+    error_message = "Each hub needs a Basic hub firewall in its own region, on the shared policy."
+  }
+
+  assert {
+    condition     = azurerm_firewall_policy.this[0].sku == "Basic"
+    error_message = "The policy tier must match the firewall tier."
+  }
+
+  assert {
+    condition = length(azurerm_virtual_hub_routing_intent.this) == 2 && alltrue([for k, ri in azurerm_virtual_hub_routing_intent.this :
+      ri.virtual_hub_id == azurerm_virtual_hub.this[k].id &&
+      toset(flatten([for p in ri.routing_policy : p.destinations])) == toset(["Internet", "PrivateTraffic"]) &&
+      alltrue([for p in ri.routing_policy : p.next_hop == azurerm_firewall.hub[k].id])
+    ])
+    error_message = "Each hub must send both internet and private traffic through its own firewall."
+  }
+
+  assert {
+    condition     = output.virtual_wan_id != null && toset(keys(output.virtual_hubs)) == toset(["uks", "ukw"])
+    error_message = "Outputs should expose the vWAN and one entry per hub."
+  }
+}
+
+run "one_region_builds_one_hub" {
+  command = apply
+
+  variables {
+    secured_vwan_enabled = true
     regions = {
-      uks = { location = "uksouth", address_prefix = "10.64.0.0/14" }
+      uks = { location = "uksouth", address_prefix = "10.64.0.0/14", hub_address_prefix = "10.64.0.0/23" }
     }
   }
 
   assert {
-    condition = (
-      length(azurerm_network_manager_connectivity_configuration.hub_mesh) == 0 &&
-      length(azurerm_network_manager_network_group.hubs) == 0 &&
-      length(azurerm_network_manager_static_member.hub) == 0
-    )
-    error_message = "A single hub has nothing to mesh with."
-  }
-
-  assert {
-    condition     = azurerm_network_manager_deployment.connectivity["uks"].configuration_ids == tolist([azurerm_network_manager_connectivity_configuration.hub_and_spoke["uks"].id])
-    error_message = "With one region, the deployment should commit only its hub-and-spoke config."
+    condition     = length(azurerm_virtual_hub.this) == 1 && length(azurerm_firewall.hub) == 1 && length(azurerm_virtual_hub_routing_intent.this) == 1
+    error_message = "One region, one secured hub."
   }
 }
 
-run "hub_sizing_and_subnets_are_configurable" {
+run "firewall_tier_is_configurable" {
   command = plan
 
   variables {
-    regions = {
-      uks = {
-        location       = "uksouth"
-        address_prefix = "10.64.0.0/14"
-        hub_ip_count   = 256
-        hub_subnets    = { GatewaySubnet = 32, AzureFirewallSubnet = 64 }
-      }
-    }
+    secured_vwan_enabled = true
+    firewall_sku_tier    = "Standard"
   }
 
   assert {
-    condition     = one(azurerm_virtual_network.hub["uks"].ip_address_pool).number_of_ip_addresses == "256"
-    error_message = "hub_ip_count should drive the hub's allocation."
-  }
-
-  assert {
-    condition     = length(azurerm_subnet.hub) == 2 && one(azurerm_subnet.hub["uks.GatewaySubnet"].ip_address_pool).number_of_ip_addresses == "32"
-    error_message = "hub_subnets should replace the defaults, not add to them."
+    condition     = azurerm_firewall_policy.this[0].sku == "Standard" && alltrue([for f in azurerm_firewall.hub : f.sku_tier == "Standard"])
+    error_message = "firewall_sku_tier should drive both the firewalls and their policy."
   }
 }
 
@@ -216,6 +192,15 @@ run "management_group_scope_is_passed_through" {
   assert {
     condition     = toset(one(azurerm_network_manager.this.scope).management_group_ids) == toset(["/providers/Microsoft.Management/managementGroups/nuvulu"])
     error_message = "An explicit management-group scope should reach the network manager."
+  }
+}
+
+run "empty_scope_defaults_to_current_subscription" {
+  command = apply
+
+  assert {
+    condition     = toset(one(azurerm_network_manager.this.scope).subscription_ids) == toset(["/subscriptions/00000000-0000-0000-0000-000000000000"])
+    error_message = "An empty network_manager_scope should default to the current subscription."
   }
 }
 
@@ -243,7 +228,7 @@ run "rejects_a_region_outside_the_root" {
     # Must be a *canonical* /14 outside the root. 10.90.0.0/14 has host bits set,
     # so the canonical-form check caught it and this run proved nothing about
     # containment — `make mutants` found that.
-    regions = { uks = { location = "uksouth", address_prefix = "10.96.0.0/14" } }
+    regions = { uks = { location = "uksouth", address_prefix = "10.96.0.0/14", hub_address_prefix = "10.96.0.0/23" } }
   }
   expect_failures = [var.regions]
 }
@@ -252,8 +237,8 @@ run "rejects_overlapping_regions" {
   command = plan
   variables {
     regions = {
-      uks = { location = "uksouth", address_prefix = "10.64.0.0/14" }
-      ukw = { location = "ukwest", address_prefix = "10.66.0.0/15" }
+      uks = { location = "uksouth", address_prefix = "10.64.0.0/14", hub_address_prefix = "10.64.0.0/23" }
+      ukw = { location = "ukwest", address_prefix = "10.66.0.0/15", hub_address_prefix = "10.66.0.0/23" }
     }
   }
   expect_failures = [var.regions]
@@ -262,7 +247,7 @@ run "rejects_overlapping_regions" {
 run "rejects_a_non_canonical_region_prefix" {
   command = plan
   variables {
-    regions = { uks = { location = "uksouth", address_prefix = "10.65.0.0/14" } }
+    regions = { uks = { location = "uksouth", address_prefix = "10.65.0.0/14", hub_address_prefix = "10.64.0.0/23" } }
   }
   expect_failures = [var.regions]
 }
@@ -270,26 +255,50 @@ run "rejects_a_non_canonical_region_prefix" {
 run "rejects_a_bad_region_key" {
   command = plan
   variables {
-    regions = { UK-South = { location = "uksouth", address_prefix = "10.64.0.0/14" } }
+    regions = { UK-South = { location = "uksouth", address_prefix = "10.64.0.0/14", hub_address_prefix = "10.64.0.0/23" } }
   }
   expect_failures = [var.regions]
 }
 
-run "rejects_a_hub_size_that_is_not_a_power_of_two" {
+run "rejects_no_regions" {
   command = plan
   variables {
-    regions = { uks = { location = "uksouth", address_prefix = "10.64.0.0/14", hub_ip_count = 1000 } }
+    regions = {}
   }
   expect_failures = [var.regions]
 }
 
-run "rejects_hub_subnets_that_do_not_fit_the_hub" {
+run "rejects_a_non_canonical_hub_prefix" {
   command = plan
   variables {
-    # the four default /26 subnets need 256 addresses
-    regions = { uks = { location = "uksouth", address_prefix = "10.64.0.0/14", hub_ip_count = 128 } }
+    regions = { uks = { location = "uksouth", address_prefix = "10.64.0.0/14", hub_address_prefix = "10.64.1.0/23" } }
   }
   expect_failures = [var.regions]
+}
+
+run "rejects_a_hub_prefix_outside_its_region" {
+  command = plan
+  variables {
+    # inside the root, canonical and /23, but in another region's space
+    regions = { uks = { location = "uksouth", address_prefix = "10.64.0.0/14", hub_address_prefix = "10.72.0.0/23" } }
+  }
+  expect_failures = [var.regions]
+}
+
+run "rejects_a_hub_smaller_than_a_24" {
+  command = plan
+  variables {
+    regions = { uks = { location = "uksouth", address_prefix = "10.64.0.0/14", hub_address_prefix = "10.64.0.0/25" } }
+  }
+  expect_failures = [var.regions]
+}
+
+run "rejects_an_unknown_firewall_tier" {
+  command = plan
+  variables {
+    firewall_sku_tier = "Free"
+  }
+  expect_failures = [var.firewall_sku_tier]
 }
 
 run "rejects_a_root_that_overlaps_the_homelab" {
@@ -298,6 +307,22 @@ run "rejects_a_root_that_overlaps_the_homelab" {
     ipam_root_prefix = "10.0.0.0/8"
   }
   expect_failures = [var.ipam_root_prefix]
+}
+
+run "rejects_a_non_canonical_root" {
+  command = plan
+  variables {
+    ipam_root_prefix = "10.65.0.0/12"
+  }
+  expect_failures = [var.ipam_root_prefix]
+}
+
+run "rejects_an_invalid_reserved_prefix" {
+  command = plan
+  variables {
+    reserved_prefixes = ["10.1.0.0"]
+  }
+  expect_failures = [var.reserved_prefixes]
 }
 
 run "rejects_a_static_cidr_outside_the_root" {
@@ -338,36 +363,4 @@ run "rejects_an_unknown_scope_access" {
     scope_accesses = ["Connectivity", "Firewall"]
   }
   expect_failures = [var.scope_accesses]
-}
-
-run "rejects_a_non_canonical_root" {
-  command = plan
-  variables {
-    ipam_root_prefix = "10.65.0.0/12"
-  }
-  expect_failures = [var.ipam_root_prefix]
-}
-
-run "rejects_an_invalid_reserved_prefix" {
-  command = plan
-  variables {
-    reserved_prefixes = ["10.1.0.0"]
-  }
-  expect_failures = [var.reserved_prefixes]
-}
-
-run "rejects_a_hub_subnet_that_is_not_a_power_of_two" {
-  command = plan
-  variables {
-    regions = { uks = { location = "uksouth", address_prefix = "10.64.0.0/14", hub_subnets = { GatewaySubnet = 48 } } }
-  }
-  expect_failures = [var.regions]
-}
-
-run "rejects_no_regions" {
-  command = plan
-  variables {
-    regions = {}
-  }
-  expect_failures = [var.regions]
 }

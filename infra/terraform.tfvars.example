@@ -4,20 +4,34 @@
 # ForceNew. Read docs/design.md before changing a prefix or a region key.
 
 name_prefix = "scandula"
-location    = "uksouth" # control plane: RG, network manager, root pool
+location    = "eastasia" # control plane: RGs, network manager, root pool, vWAN, firewall policy
 
 ipam_root_prefix = "10.64.0.0/12" # 10.64.0.0 – 10.79.255.255
 
+# Each region gets an IPAM pool, and — when secured_vwan_enabled — a secured hub on
+# hub_address_prefix, which is reserved in that pool either way.
+#
+# East Asia + Southeast Asia: an Azure region pair, both with availability zones.
+# Chosen to avoid capacity contention: UK South exposes no VM sizes at all to the
+# Visual Studio subscription. See docs/design.md#regions.
 regions = {
-  uks = {
-    location       = "uksouth"
-    address_prefix = "10.64.0.0/14"
+  eas = {
+    location           = "eastasia"
+    address_prefix     = "10.64.0.0/14"
+    hub_address_prefix = "10.64.0.0/23"
   }
-  ukw = {
-    location       = "ukwest"
-    address_prefix = "10.68.0.0/14"
+  sea = {
+    location           = "southeastasia"
+    address_prefix     = "10.68.0.0/14"
+    hub_address_prefix = "10.68.0.0/23"
   }
 }
+
+# ⚠ COST. Two secured hubs (Standard hub + Basic firewall) are about $942/month
+# before data processing. On a Visual Studio credit subscription that runs out in
+# under two days and the subscription is disabled. Leave this false there.
+secured_vwan_enabled = false
+firewall_sku_tier    = "Basic"
 
 # Reserve blocks that live outside AVNM's view, e.g. a P2S VPN client pool.
 # Keep them out of every region pool.

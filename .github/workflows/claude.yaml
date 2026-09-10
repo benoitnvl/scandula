@@ -43,17 +43,18 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           model: claude-sonnet-5
           custom_instructions: |
-            This repo is Terraform (azurerm ~> 5.4) for Azure connectivity: regional
-            hub VNets whose address space is allocated by Azure Virtual Network
-            Manager (AVNM) IPAM pools, plus AVNM connectivity configurations and
-            deployments. When reviewing, especially flag:
-              - hardcoded address_space / address_prefixes on hub VNets or subnets
-                (they must come from IPAM `ip_address_pool` allocations);
-              - IPAM pool prefixes that could overlap the homelab (10.1.0.0/23) or
-                each other;
-              - any change that forces replacement of an IPAM pool, hub VNet or
-                network manager (name, location, prefixes) — call it out loudly;
-              - connectivity configuration changes not followed by an
-                `azurerm_network_manager_deployment` update (they don't take effect
-                until deployed);
+            This repo is Terraform (azurerm ~> 5.4) for Azure connectivity: a
+            secured Virtual WAN (Standard hub + Azure Firewall + routing intent per
+            region, gated behind secured_vwan_enabled because it costs about
+            $470/month per hub) with the address plan in Azure Virtual Network
+            Manager (AVNM) IPAM pools. When reviewing, especially flag:
+              - anything that makes hourly-billed resources plan while
+                secured_vwan_enabled is false, or flips its default to true;
+              - hub_address_prefix ranges not reserved as static CIDRs in their
+                region pool, or overlapping the homelab (10.1.0.0/23);
+              - any change that forces replacement of an IPAM pool, virtual hub,
+                firewall or network manager (name, location, prefixes) — call it
+                out loudly; replacing a hub drops its spoke connections;
+              - routing intent that stops sending private or internet traffic
+                through the hub firewall;
               - committed tenant/subscription ids, tfvars or backend.hcl.
