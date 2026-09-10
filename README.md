@@ -81,3 +81,9 @@ what it should. `make mutants` proves each validation is load-bearing.
 CI (GitHub-hosted `ubuntu-latest`: stazzona has no runner scale set for this repo) runs
 `terraform fmt -check`, `validate`, `test` and a trivy misconfig + secret scan on every
 PR. **CI never touches Azure.** `make apply` from a workstation is the only write path.
+
+A separate `claude` workflow has Claude review every non-draft PR and answer `@claude`
+comments. It authenticates with the `CLAUDE_CODE_OAUTH_TOKEN` repo secret, so its usage
+counts against the Claude subscription that created the token. A green `claude` check isn't
+proof of a review; the review posted on the PR is. A PR that edits `claude.yaml` can't run
+the review at all.
