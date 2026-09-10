@@ -35,13 +35,14 @@ enforces that.
 - CI runs fmt, validate, test and trivy with `init -backend=false`, and **never
   authenticates to Azure**. It's on GitHub-hosted `ubuntu-latest`, **not stazzona**:
   benoitnvl is a user account, so self-hosted runners are per-repo, and stazzona has no
-  scale set for scandula. `runs-on: stazzona` queues forever; PR #1 found that out. `make plan` → `make apply` (which applies that
-  saved plan) from a workstation is the only write path.
-- `.terraform.lock.hcl` must be produced by **terraform** (`make lock`), never tofu — a
-  tofu lock file records `registry.opentofu.org` and is useless here. It isn't committed
-  yet: the first real `make init` should create it, and it lands in a PR.
-- azurerm 5.x registers **no** resource providers by default; `Microsoft.Network` is
-  registered once by hand (docs/bootstrap.md).
+  scale set for scandula. `runs-on: stazzona` queues forever; PR #1 found that out.
+- `make plan` → `make apply` (which applies that saved plan) from a workstation is the
+  only write path.
+- `infra/.terraform.lock.hcl` is committed. Regenerate it with `make lock`, only ever with
+  **terraform**: a tofu lock file records `registry.opentofu.org` and is useless here.
+- azurerm 5.x registers **no** resource providers by default. `Microsoft.Network`
+  (Terraform) and `Microsoft.Storage` (the state account) are registered once by hand;
+  see docs/bootstrap.md, which also records what the first bootstrap tripped over.
 
 ## Tests
 
