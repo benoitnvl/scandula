@@ -47,6 +47,10 @@ test: ## terraform test — plan-only against a mocked azurerm, no Azure creds n
 mutants: ## Disable each validation in turn; some test must go red (run after touching variables.tf)
 	TF=$(TF) python3 scripts/validation-mutants.py $(TF_DIR)
 
+.PHONY: diagram
+diagram: ## Re-export docs/diagrams/architecture.svg from its .drawio source (needs the draw.io desktop app)
+	drawio --export --format svg --embed-diagram --border 20 --output docs/diagrams/architecture.svg docs/diagrams/architecture.drawio
+
 .PHONY: plan
 plan: check ## terraform plan -out=tfplan
 	$(TF) -chdir=$(TF_DIR) plan -out=tfplan

@@ -1,0 +1,124 @@
+<mxfile host="drawio">
+  <diagram id="scandula-architecture" name="scandula">
+    <mxGraphModel dx="1200" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1160" pageHeight="800" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- title and legend -->
+        <mxCell id="title" value="scandula: Aberdeen's Azure connectivity (secured Virtual WAN + AVNM IPAM)" style="text;html=0;align=left;verticalAlign=middle;fontSize=18;fontStyle=1;fontColor=#1f2937;" vertex="1" parent="1">
+          <mxGeometry x="20" y="15" width="820" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-solid" value="Always built" style="rounded=1;html=0;fillColor=#ffffff;strokeColor=#374151;fontSize=12;fontColor=#1f2937;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="870" y="215" width="270" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-dashed" value="Only when secured_vwan_enabled = true&#xa;(default false: nothing billed hourly)" style="rounded=1;html=0;dashed=1;fillColor=#fff8ec;strokeColor=#b7791f;fontSize=12;fontColor=#1f2937;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="870" y="252" width="270" height="44" as="geometry" />
+        </mxCell>
+
+        <!-- control plane (always built) -->
+        <mxCell id="cp" value="rg-scandula-connectivity  ·  control plane  ·  East Asia" style="rounded=1;html=0;verticalAlign=top;align=left;spacingLeft=12;spacingTop=6;fillColor=#f5f7fa;strokeColor=#5b6b7f;fontSize=13;fontStyle=1;fontColor=#1f2937;arcSize=3;" vertex="1" parent="1">
+          <mxGeometry x="20" y="70" width="820" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="avnm" value="avnm-scandula&#xa;Azure Virtual Network Manager&#xa;(IPAM only)" style="rounded=1;html=0;fillColor=#dbeafe;strokeColor=#1d4ed8;fontSize=12;fontColor=#1e3a8a;" vertex="1" parent="1">
+          <mxGeometry x="40" y="105" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="root" value="IPAM root pool&#xa;10.64.0.0/12" style="rounded=1;html=0;fillColor=#e0f2fe;strokeColor=#0369a1;fontSize=12;fontStyle=1;fontColor=#0c4a6e;" vertex="1" parent="1">
+          <mxGeometry x="330" y="105" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="pool-eas" value="region pool eas  ·  East Asia&#xa;10.64.0.0/14" style="rounded=1;html=0;verticalAlign=top;spacingTop=4;fillColor=#e0f2fe;strokeColor=#0369a1;fontSize=12;fontColor=#0c4a6e;" vertex="1" parent="1">
+          <mxGeometry x="150" y="190" width="250" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="res-eas" value="hub reservation 10.64.0.0/23&#xa;(static CIDR)" style="rounded=1;html=0;fillColor=#ffffff;strokeColor=#0369a1;fontSize=11;fontColor=#0c4a6e;" vertex="1" parent="1">
+          <mxGeometry x="170" y="235" width="210" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="pool-sea" value="region pool sea  ·  Southeast Asia&#xa;10.68.0.0/14" style="rounded=1;html=0;verticalAlign=top;spacingTop=4;fillColor=#e0f2fe;strokeColor=#0369a1;fontSize=12;fontColor=#0c4a6e;" vertex="1" parent="1">
+          <mxGeometry x="460" y="190" width="250" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="res-sea" value="hub reservation 10.68.0.0/23&#xa;(static CIDR)" style="rounded=1;html=0;fillColor=#ffffff;strokeColor=#0369a1;fontSize=11;fontColor=#0c4a6e;" vertex="1" parent="1">
+          <mxGeometry x="480" y="235" width="210" height="38" as="geometry" />
+        </mxCell>
+
+        <!-- terraform state (always built, by bootstrap) -->
+        <mxCell id="tfstate" value="Terraform state&#xa;rg-scandula-tfstate / stscandulatfstate&#xa;UK South  ·  Entra ID auth only, no keys" style="rounded=1;html=0;fillColor=#ecfdf5;strokeColor=#047857;fontSize=12;fontColor=#064e3b;" vertex="1" parent="1">
+          <mxGeometry x="870" y="105" width="270" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- virtual wan (gated) -->
+        <mxCell id="vwan" value="rg-scandula-vwan  ·  vwan-scandula (Standard Virtual WAN)" style="rounded=1;html=0;dashed=1;verticalAlign=top;align=left;spacingLeft=12;spacingTop=6;fillColor=#fff8ec;strokeColor=#b7791f;fontSize=13;fontStyle=1;fontColor=#1f2937;arcSize=3;" vertex="1" parent="1">
+          <mxGeometry x="20" y="340" width="820" height="305" as="geometry" />
+        </mxCell>
+        <mxCell id="hub-eas" value="vhub-scandula-eas  ·  East Asia&#xa;10.64.0.0/23  ·  Standard hub" style="rounded=1;html=0;dashed=1;verticalAlign=top;spacingTop=6;fillColor=#ffffff;strokeColor=#b7791f;fontSize=12;fontStyle=1;fontColor=#1f2937;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="385" width="330" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="ri-eas" value="routing intent&#xa;private + internet traffic → firewall" style="rounded=1;html=0;dashed=1;fillColor=#fef3c7;strokeColor=#b45309;fontSize=11;fontColor=#78350f;" vertex="1" parent="1">
+          <mxGeometry x="60" y="440" width="290" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="fw-eas" value="afw-scandula-eas&#xa;Azure Firewall Basic (AZFW_Hub)" style="rounded=1;html=0;dashed=1;fillColor=#fee2e2;strokeColor=#b91c1c;fontSize=11;fontColor=#7f1d1d;" vertex="1" parent="1">
+          <mxGeometry x="60" y="495" width="290" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="hub-sea" value="vhub-scandula-sea  ·  Southeast Asia&#xa;10.68.0.0/23  ·  Standard hub" style="rounded=1;html=0;dashed=1;verticalAlign=top;spacingTop=6;fillColor=#ffffff;strokeColor=#b7791f;fontSize=12;fontStyle=1;fontColor=#1f2937;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="490" y="385" width="330" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="ri-sea" value="routing intent&#xa;private + internet traffic → firewall" style="rounded=1;html=0;dashed=1;fillColor=#fef3c7;strokeColor=#b45309;fontSize=11;fontColor=#78350f;" vertex="1" parent="1">
+          <mxGeometry x="510" y="440" width="290" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="fw-sea" value="afw-scandula-sea&#xa;Azure Firewall Basic (AZFW_Hub)" style="rounded=1;html=0;dashed=1;fillColor=#fee2e2;strokeColor=#b91c1c;fontSize=11;fontColor=#7f1d1d;" vertex="1" parent="1">
+          <mxGeometry x="510" y="495" width="290" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="policy" value="afwp-scandula (Basic policy)  ·  rcg-baseline&#xa;allow spoke ↔ spoke inside 10.64.0.0/12&#xa;allow HTTP 80 / HTTPS 443 out  ·  deny everything else" style="rounded=1;html=0;dashed=1;fillColor=#fce7f3;strokeColor=#9d174d;fontSize=11;fontColor=#831843;" vertex="1" parent="1">
+          <mxGeometry x="245" y="572" width="370" height="62" as="geometry" />
+        </mxCell>
+
+        <!-- outside the wan -->
+        <mxCell id="internet" value="Internet" style="ellipse;shape=cloud;html=0;fillColor=#ffffff;strokeColor=#6b7280;fontSize=13;fontStyle=1;fontColor=#374151;" vertex="1" parent="1">
+          <mxGeometry x="910" y="410" width="200" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="egress-note" value="HTTP/HTTPS out only,&#xa;each hub through its own firewall" style="text;html=0;align=center;verticalAlign=top;fontSize=11;fontColor=#374151;" vertex="1" parent="1">
+          <mxGeometry x="890" y="530" width="240" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="spokes-eas" value="spoke VNets  ·  East Asia&#xa;future, each in its own repo&#xa;IPAM from 10.64.0.0/14  ·  hub connection" style="rounded=1;html=0;dashed=1;fillColor=#f3f4f6;strokeColor=#6b7280;fontSize=11;fontColor=#374151;" vertex="1" parent="1">
+          <mxGeometry x="40" y="685" width="330" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="spokes-sea" value="spoke VNets  ·  Southeast Asia&#xa;future, each in its own repo&#xa;IPAM from 10.68.0.0/14  ·  hub connection" style="rounded=1;html=0;dashed=1;fillColor=#f3f4f6;strokeColor=#6b7280;fontSize=11;fontColor=#374151;" vertex="1" parent="1">
+          <mxGeometry x="490" y="685" width="330" height="62" as="geometry" />
+        </mxCell>
+
+        <!-- edges -->
+        <mxCell id="e-avnm-root" value="owns" style="endArrow=block;html=0;strokeColor=#1d4ed8;fontSize=11;fontColor=#1e3a8a;labelBackgroundColor=#f5f7fa;" edge="1" parent="1" source="avnm" target="root">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-root-eas" value="" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=0;strokeColor=#0369a1;" edge="1" parent="1" source="root" target="pool-eas">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-root-sea" value="" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=0;strokeColor=#0369a1;" edge="1" parent="1" source="root" target="pool-sea">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-res-eas" value="reserved for the hub" style="endArrow=block;html=0;dashed=1;dashPattern=2 3;strokeColor=#0369a1;fontSize=11;fontColor=#0c4a6e;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="res-eas" target="hub-eas">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-res-sea" value="reserved for the hub" style="endArrow=block;html=0;dashed=1;dashPattern=2 3;strokeColor=#0369a1;fontSize=11;fontColor=#0c4a6e;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="res-sea" target="hub-sea">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-hub-hub" value="hub-to-hub&#xa;(via both firewalls)" style="endArrow=block;startArrow=block;html=0;strokeColor=#b7791f;strokeWidth=2;fontSize=11;fontColor=#78350f;labelBackgroundColor=#fff8ec;" edge="1" parent="1" source="hub-eas" target="hub-sea">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-pol-eas" value="" style="endArrow=block;html=0;dashed=1;dashPattern=2 3;strokeColor=#9d174d;" edge="1" parent="1" source="policy" target="fw-eas">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-pol-sea" value="" style="endArrow=block;html=0;dashed=1;dashPattern=2 3;strokeColor=#9d174d;" edge="1" parent="1" source="policy" target="fw-sea">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-egress" value="" style="endArrow=block;html=0;strokeColor=#6b7280;" edge="1" parent="1" source="hub-sea" target="internet">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-spoke-eas" value="" style="endArrow=block;html=0;dashed=1;strokeColor=#6b7280;" edge="1" parent="1" source="spokes-eas" target="hub-eas">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-spoke-sea" value="" style="endArrow=block;html=0;dashed=1;strokeColor=#6b7280;" edge="1" parent="1" source="spokes-sea" target="hub-sea">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
