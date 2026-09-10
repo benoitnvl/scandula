@@ -1,8 +1,11 @@
 # root pool (ipam_root_prefix, in var.location)
 #  ├── one child pool per region (regions[*].address_prefix, in that region)
-#  │     ├── hub VNet  — hub_ip_count addresses, block chosen by IPAM
-#  │     └── spokes    — allocated by the repos that own them, not here
-#  └── static CIDRs    — reserved for things AVNM can't see (root_static_cidrs)
+#  │     ├── hub reservation — the vWAN hub's hub_address_prefix, as a static CIDR
+#  │     └── spokes          — allocated by the repos that own them, not here
+#  └── static CIDRs          — reserved for things AVNM can't see (root_static_cidrs)
+#
+# The hub reservations exist whether or not secured_vwan_enabled is on: the address
+# plan shouldn't change shape when the (expensive) hubs are switched on.
 #
 # ⚠ Pool name, location, parent and prefixes are all ForceNew, and a pool with
 # allocations can't be deleted. Treat any "must be replaced" on a pool in a plan
@@ -26,9 +29,19 @@ resource "azurerm_network_manager_ipam_pool" "region" {
   network_manager_id = azurerm_network_manager.this.id
   parent_pool_name   = azurerm_network_manager_ipam_pool.root.name
   display_name       = each.key
-  description        = "Hub and spokes in ${each.value.location}."
+  description        = "The vWAN hub and the spokes in ${each.value.location}."
   address_prefixes   = [each.value.address_prefix]
   tags               = local.tags
+}
+
+# A Virtual WAN hub isn't a VNet, so it can't take an IPAM allocation. Reserve its
+# range in the region pool so IPAM never hands it to a spoke.
+resource "azurerm_network_manager_ipam_pool_static_cidr" "hub" {
+  for_each = var.regions
+
+  name             = "vhub-${each.key}"
+  ipam_pool_id     = azurerm_network_manager_ipam_pool.region[each.key].id
+  address_prefixes = [each.value.hub_address_prefix]
 }
 
 resource "azurerm_network_manager_ipam_pool_static_cidr" "root" {

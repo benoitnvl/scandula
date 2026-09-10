@@ -8,11 +8,7 @@ locals {
   scope_is_default       = length(var.network_manager_scope.management_group_ids) + length(var.network_manager_scope.subscription_ids) == 0
   scope_subscription_ids = local.scope_is_default ? [data.azurerm_subscription.current.id] : var.network_manager_scope.subscription_ids
 
-  # Hubs are meshed to each other only when there's more than one of them.
-  hub_mesh = length(var.regions) > 1
-
-  # "<region>.<subnet name>" => one azurerm_subnet per hub subnet.
-  hub_subnets = merge([for rk, r in var.regions : {
-    for name, size in r.hub_subnets : "${rk}.${name}" => { region = rk, name = name, size = size }
-  }]...)
+  # The regions that get a secured hub: all of them, or none while the cost guard
+  # (secured_vwan_enabled) is off.
+  vwan_regions = var.secured_vwan_enabled ? var.regions : {}
 }

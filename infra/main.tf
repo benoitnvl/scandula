@@ -7,20 +7,11 @@ resource "azurerm_resource_group" "connectivity" {
   tags     = local.tags
 }
 
-# One resource group per hub region.
-resource "azurerm_resource_group" "hub" {
-  for_each = var.regions
-
-  name     = "rg-${var.name_prefix}-hub-${each.key}"
-  location = each.value.location
-  tags     = local.tags
-}
-
 resource "azurerm_network_manager" "this" {
   name                = "avnm-${var.name_prefix}"
   location            = var.location
   resource_group_name = azurerm_resource_group.connectivity.name
-  description         = "Hub connectivity and IPAM, managed from benoitnvl/scandula."
+  description         = "IPAM for the Azure estate, managed from benoitnvl/scandula."
   scope_accesses      = var.scope_accesses
   tags                = local.tags
 

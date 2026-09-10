@@ -6,7 +6,7 @@
 # in CI), and every one has a matching run in tests/.
 
 variable "name_prefix" {
-  description = "Prefix for every resource name: rg-<prefix>-connectivity, avnm-<prefix>, vnet-<prefix>-hub-<region>, …"
+  description = "Prefix for every resource name: rg-<prefix>-connectivity, avnm-<prefix>, vhub-<prefix>-<region>, …"
   type        = string
   default     = "scandula"
 
@@ -17,7 +17,7 @@ variable "name_prefix" {
 }
 
 variable "location" {
-  description = "Region for the control plane: its resource group, the network manager and the root IPAM pool. Changing it replaces all three."
+  description = "Region for the control plane: its resource groups, the network manager, the root IPAM pool, the Virtual WAN and the firewall policy. Changing it replaces them."
   type        = string
   default     = "uksouth"
 }
@@ -26,6 +26,30 @@ variable "tags" {
   description = "Extra tags merged onto everything (managed-by and repo are always set)."
   type        = map(string)
   default     = {}
+}
+
+variable "secured_vwan_enabled" {
+  description = <<-EOT
+    Build the Virtual WAN, its hubs, their firewalls and routing intent. OFF by
+    default because it is not cheap: each secured hub is a Standard hub
+    ($0.25/h) plus a Basic firewall in it ($0.395/h), about $470/month per
+    region before data processing (Azure retail prices, 2026-09-10). A Visual
+    Studio credit subscription runs out in under two days and is then disabled.
+    IPAM pools and the hub address reservations are built either way.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "firewall_sku_tier" {
+  description = "Azure Firewall tier in every hub (and its policy). Basic is the cheapest: up to 250 Mbps, no DNS proxy. Standard costs about 3x."
+  type        = string
+  default     = "Basic"
+
+  validation {
+    condition     = contains(["Basic", "Standard", "Premium"], var.firewall_sku_tier)
+    error_message = "firewall_sku_tier must be Basic, Standard or Premium."
+  }
 }
 
 variable "network_manager_scope" {
@@ -52,7 +76,7 @@ variable "network_manager_scope" {
 }
 
 variable "scope_accesses" {
-  description = "Configuration types AVNM may deploy. Connectivity is all this repo uses today; add Routing / SecurityAdmin when a hub gets a firewall."
+  description = "Configuration types AVNM may deploy. AVNM is only used for IPAM today (hub connectivity is Virtual WAN's job), but the network manager needs at least one."
   type        = list(string)
   default     = ["Connectivity"]
 
@@ -96,29 +120,21 @@ variable "ipam_root_prefix" {
 
 variable "regions" {
   description = <<-EOT
-    One hub per entry, keyed by a short code that goes into every name (e.g. "uks").
-    The key is identity: renaming it, or changing location or address_prefix,
-    REPLACES that region's pool, hub, subnets and connectivity configuration.
+    One Virtual WAN hub per entry, keyed by a short code that goes into every name
+    (e.g. "uks"). The key is identity: renaming it, or changing location or a
+    prefix, REPLACES that region's pool and hub.
 
-      location         Azure region of the hub and its pool
-      address_prefix   this region's IPAM child pool; must sit inside ipam_root_prefix
-      hub_ip_count     addresses the hub VNet takes from the region pool — a power
-                       of two; it can grow later but can NEVER shrink
-      hub_subnets      subnet name => address count, each allocated from the pool
-      use_hub_gateway  spokes route via the hub's VPN/ExpressRoute gateway — set it
-                       only once that gateway exists
+      location            Azure region of the hub and its pool
+      address_prefix      this region's IPAM child pool; must sit inside ipam_root_prefix
+      hub_address_prefix  the Virtual WAN hub's own range: /24 or larger (Azure
+                          recommends /23), inside address_prefix. A vWAN hub isn't a
+                          VNet, so IPAM can't allocate it; it's reserved in the pool
+                          as a static CIDR instead, so spokes never get it.
   EOT
   type = map(object({
-    location       = string
-    address_prefix = string
-    hub_ip_count   = optional(number, 1024)
-    hub_subnets = optional(map(number), {
-      GatewaySubnet                 = 64
-      AzureFirewallSubnet           = 64
-      AzureFirewallManagementSubnet = 64
-      AzureBastionSubnet            = 64
-    })
-    use_hub_gateway = optional(bool, false)
+    location           = string
+    address_prefix     = string
+    hub_address_prefix = string
   }))
 
   validation {
@@ -148,16 +164,21 @@ variable "regions" {
   }
 
   validation {
-    condition     = alltrue([for r in values(var.regions) : contains([for i in range(4, 17) : pow(2, i)], r.hub_ip_count)])
-    error_message = "hub_ip_count must be a power of two between 16 and 65536."
+    condition     = alltrue([for r in values(var.regions) : try(cidrsubnet(r.hub_address_prefix, 0, 0) == r.hub_address_prefix, false)])
+    error_message = "Every hub_address_prefix must be a CIDR in canonical form (no host bits set), e.g. 10.64.0.0/23."
   }
 
   validation {
-    condition = alltrue([for r in values(var.regions) :
-      alltrue([for n in values(r.hub_subnets) : contains([for i in range(3, 17) : pow(2, i)], n)]) &&
-      sum(concat([0], values(r.hub_subnets))) <= r.hub_ip_count
-    ])
-    error_message = "Each hub subnet size must be a power of two (8 or more), and a hub's subnets must fit inside its hub_ip_count."
+    condition = alltrue([for r in values(var.regions) : try(
+      tonumber(split("/", r.hub_address_prefix)[1]) >= tonumber(split("/", r.address_prefix)[1]) &&
+      cidrsubnet(format("%s/%s", cidrhost(r.hub_address_prefix, 0), split("/", r.address_prefix)[1]), 0, 0) == cidrsubnet(r.address_prefix, 0, 0),
+    false)])
+    error_message = "Every hub_address_prefix must sit inside its own region's address_prefix."
+  }
+
+  validation {
+    condition     = alltrue([for r in values(var.regions) : try(tonumber(split("/", r.hub_address_prefix)[1]) <= 24, false)])
+    error_message = "A Virtual WAN hub needs a /24 or larger (Azure recommends /23)."
   }
 }
 

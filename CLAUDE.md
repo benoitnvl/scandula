@@ -1,32 +1,47 @@
 # scandula
 
-Terraform (HashiCorp, **not** OpenTofu) for the Azure connectivity core: regional hub
-VNets whose address space comes from AVNM IPAM pools, plus AVNM connectivity
-configurations and deployments. `README.md` has the layout, `docs/design.md` the
-address plan. This file is what you need in order not to break things.
+Terraform (HashiCorp, **not** OpenTofu) for the Azure connectivity core: a secured
+Virtual WAN (Standard hub + Azure Firewall + routing intent per region), with the
+address plan in AVNM IPAM pools. `README.md` has the layout, `docs/design.md` the
+topology, address plan and cost. This file is what you need in order not to break
+things.
+
+## ⚠ The secured vWAN costs real money, so it's off by default
+
+`secured_vwan_enabled` defaults to **false**, and `tests/` asserts that nothing billable
+by the hour is planned while it's off. Each secured hub is about **$470/month** (Standard
+hub $0.25/h + Firewall Basic in a hub $0.395/h, retail prices 2026-09-10), and the price
+is the same in every commercial region. The bootstrap subscription is a **Visual Studio
+credit** subscription with a spending limit: two hubs would burn through the credit in
+under two days, and then Azure **disables the subscription, tfstate account included**.
+Never flip the flag there, and never flip it without the user saying so.
 
 ## ⚠ Most address-plan edits are destructive
 
 - IPAM pool `name`, `location`, `parent_pool_name` and `address_prefixes` are **ForceNew**,
   and Azure won't delete a pool that still has allocations. A region key is identity:
-  renaming `uks` replaces its pool, hub, subnets, config and deployment.
-- `number_of_ip_addresses` (hub and subnets) can **grow but never shrink**.
-- Read every plan for `must be replaced` on a pool, a hub VNet or the network manager,
-  and stop if you see one you didn't intend.
+  renaming `uks` replaces its pool, its hub reservation, and its hub.
+- A virtual hub's `address_prefix`, `location` and `virtual_wan_id` are ForceNew, and
+  replacing a hub **drops every spoke connection to it**.
+- Read every plan for `must be replaced` on a pool, a hub, a firewall or the network
+  manager, and stop if you see one you didn't intend.
 
-## ⚠ Nothing in AVNM is live until it's deployed
+## Hub ranges are explicit, but IPAM still owns them
 
-A connectivity configuration does nothing until an `azurerm_network_manager_deployment`
-commits it, and deployments are **per region**. Each region's deployment lists exactly
-the configs committed there (its own hub-and-spoke, plus the hub mesh). Destroying a
-deployment un-commits them and **removes the peerings AVNM made** in that region.
+A vWAN hub isn't a VNet, so it can't take an `ip_address_pool` allocation. Each region's
+`hub_address_prefix` is written in tfvars and **reserved as a static CIDR** in that
+region's pool (always, even with the hubs off), so IPAM never hands it to a spoke.
+Validations keep it canonical, /24 or larger, and inside its own region pool. The root
+pool must never overlap `reserved_prefixes` (the homelab LAN, `10.1.0.0/23`).
 
-## Address space is never hardcoded
+## Connectivity is Virtual WAN's, not AVNM's
 
-Hubs and hub subnets use `ip_address_pool { … }`, not `address_space` /
-`address_prefixes`. Read what IPAM allocated from the `hub_vnets` output. The root pool
-must never overlap `reserved_prefixes` (the homelab LAN, `10.1.0.0/23`) — a validation
-enforces that.
+Standard vWAN meshes its hubs itself, and spokes attach with
+`azurerm_virtual_hub_connection` from the repos that own them. AVNM can't do this job
+here: a vWAN hub can't join a network group, and an AVNM hub-and-spoke config with a vWAN
+hub is preview and needs a vWAN connection policy that azurerm 5.4 can't set. Routing
+intent sends private **and** internet traffic through each hub's firewall. The shared
+policy has no rules yet, so everything crossing a hub is denied until rules are added.
 
 ## State, CI, and the one write path
 
@@ -49,7 +64,8 @@ enforces that.
 `infra/tests/*.tftest.hcl` run against `mock_provider "azurerm"`, so `command = apply` is
 safe and needs no credentials. Every validation in `variables.tf` has a rejection run;
 **add one with every new validation**, and assert on anything whose wiring matters
-(which pool a VNet allocates from, which configs a deployment commits).
+(which pool a hub range is reserved on, which firewall a hub's routing intent points at,
+and that the cost guard really plans nothing).
 
 **After touching `variables.tf`, run `make mutants`.** It disables each validation in turn
 and demands a red run. A green suite is not enough: on day one it found three rejection
@@ -61,9 +77,8 @@ Mock gotchas that shape the test file:
 - azurerm validates ID **format** even when mocked, so referenced types need realistic
   `mock_resource` ids (random 8-char strings fail).
 - Mock ids are per resource *type*, and `override_resource` can't target an instance like
-  `region["uks"]`. Per-region wiring is asserted through names and locations, and
-  cross-resource wiring (root vs region pool, mesh vs hub-and-spoke) through
-  resource-level overrides.
+  `region["uks"]`. Per-region wiring is asserted through names, locations and prefixes,
+  and cross-resource wiring (root vs region pool) through resource-level overrides.
 - tofu skips every run after a failed one, so one red run can hide others. `make mutants`
   accounts for that. Read raw `test` output with that in mind.
 

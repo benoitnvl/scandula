@@ -1,5 +1,5 @@
 output "network_manager_id" {
-  description = "The AVNM instance. Network groups and IPAM pools live under it."
+  description = "The AVNM instance. The IPAM pools live under it."
   value       = azurerm_network_manager.this.id
 }
 
@@ -13,23 +13,35 @@ output "ipam_region_pool_ids" {
   value       = { for k, p in azurerm_network_manager_ipam_pool.region : k => p.id }
 }
 
-output "hub_vnets" {
-  description = "Region => hub VNet, including the prefixes IPAM actually allocated to it."
-  value = { for k, v in azurerm_virtual_network.hub : k => {
-    id                  = v.id
-    name                = v.name
-    resource_group_name = v.resource_group_name
-    location            = v.location
-    address_prefixes    = one(v.ip_address_pool).allocated_ip_address_prefixes
+output "hub_address_prefixes" {
+  description = "Region => the range reserved for that region's vWAN hub (reserved even while the hubs are off)."
+  value       = { for k, r in var.regions : k => r.hub_address_prefix }
+}
+
+output "secured_vwan_enabled" {
+  description = "Whether the (costly) secured Virtual WAN is built."
+  value       = var.secured_vwan_enabled
+}
+
+output "virtual_wan_id" {
+  description = "The Virtual WAN, or null while secured_vwan_enabled is off."
+  value       = one(azurerm_virtual_wan.this[*].id)
+}
+
+output "virtual_hubs" {
+  description = "Region => secured hub. Spokes attach with azurerm_virtual_hub_connection to `id`. Empty while secured_vwan_enabled is off."
+  value = { for k, h in azurerm_virtual_hub.this : k => {
+    id                  = h.id
+    name                = h.name
+    location            = h.location
+    address_prefix      = h.address_prefix
+    firewall_id         = azurerm_firewall.hub[k].id
+    firewall_private_ip = one(azurerm_firewall.hub[k].virtual_hub).private_ip_address
+    firewall_public_ips = one(azurerm_firewall.hub[k].virtual_hub).public_ip_addresses
   } }
 }
 
-output "hub_subnet_ids" {
-  description = "\"<region>.<subnet>\" => subnet id (GatewaySubnet, AzureFirewallSubnet, …)."
-  value       = { for k, s in azurerm_subnet.hub : k => s.id }
-}
-
-output "spoke_network_group_ids" {
-  description = "Region => network group. A spoke joins its region's hub by becoming a member of this group."
-  value       = { for k, g in azurerm_network_manager_network_group.spokes : k => g.id }
+output "firewall_policy_id" {
+  description = "The policy shared by every hub firewall — add rule collection groups to it. Null while off."
+  value       = one(azurerm_firewall_policy.this[*].id)
 }
