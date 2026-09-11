@@ -1,11 +1,15 @@
-# Copy to backend.hcl (gitignored) and fill in, then `make ipam-platform-init`.
+# For a local, read-only look only (`make ipam-platform-init`, `make ipam-platform-plan`).
+# Part 2 is applied only by GitHub Actions (azure-ipam/README.md), which passes these
+# same settings itself.
 #
-# The same state account as infra/, under its own key.
-# ⚠ This state holds the engine's client secret (azuread_application_password and
-# the Key Vault secret), so only the people who run part 2 should be able to read it.
+# The same state account as infra/, in part 2's own container. Only the platform CI
+# identity can read or write it; the entra identity has no access at all. That is
+# what keeps the applies in GitHub.
+# ⚠ This state holds the engine's client secret (azuread_application_password and the
+# Key Vault secret). Give Storage Blob Data Reader only to people allowed to see it.
 resource_group_name  = "rg-scandula-tfstate"
 storage_account_name = "stscandulatfstate"
-container_name       = "tfstate"
+container_name       = "tfstate-azure-ipam-platform"
 key                  = "azure-ipam-platform.tfstate"
 
 use_azuread_auth = true

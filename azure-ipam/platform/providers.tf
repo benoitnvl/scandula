@@ -1,7 +1,10 @@
-# Part 2 is run by us, against the paid subscription that hosts Azure IPAM:
-#   ARM_SUBSCRIPTION_ID  that subscription. Owner, because it creates role assignments.
-#   az login             as an identity in part 1's platform_owner_object_ids, so it can
-#                        create the engine's secret and set the UI's redirect URI.
+# Part 2 is applied only by GitHub Actions (.github/workflows/azure-ipam-deploy.yaml),
+# as the platform CI identity over OIDC, against the paid subscription that hosts
+# Azure IPAM. That identity holds (azure-ipam/README.md):
+#   - Owner on the subscription, because it creates role assignments;
+#   - Graph Application.ReadWrite.OwnedBy, and ownership of both app registrations
+#     (part 1's platform_owner_object_ids). That's what lets it create the engine's
+#     secret and set the UI's redirect URI.
 #
 # azurerm 5.x registers no resource providers by default: register Microsoft.Web,
 # Microsoft.DocumentDB, Microsoft.KeyVault, Microsoft.ManagedIdentity,

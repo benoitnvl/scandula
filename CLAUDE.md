@@ -73,10 +73,21 @@ repo's `ipam_root_prefix`. Workloads move under AVNM piece by piece.
 Azure IPAM is deployed by two Terraform roots in `azure-ipam/` (runbook in its README), not by
 Microsoft's `deploy.ps1`:
 
-- `azure-ipam/entra` is part 1, the Entra ID objects, run by an Aberdeen tenant admin (Global
-  Administrator). `azure-ipam/platform` is part 2, the Azure resources, run by us. Part 1 makes
-  part 2's identities owners of both apps, so part 2 creates the engine secret itself. **No
-  secret is ever handed over.** Don't reintroduce a hand-over.
+- `azure-ipam/entra` is part 1 (the Entra ID objects) and `azure-ipam/platform` is part 2 (the
+  Azure resources). **Both are applied only by `.github/workflows/azure-ipam-deploy.yaml`**,
+  each as its own OIDC workload identity. There are no local apply targets. **Each part's state
+  has its own container** (`tfstate-azure-ipam-entra` and `-platform`), writable only by that
+  part's identity. The platform identity may also read part 1's, and the entra identity gets
+  nothing on part 2's, because that state holds the engine secret. Don't add a local apply
+  path back, and don't merge the containers.
+- Part 1 makes part 2's identity an owner of both apps, so part 2 creates the engine secret
+  itself. **No secret is ever handed over.** Don't reintroduce a hand-over.
+- **An apply runs only with the digest of a reviewed plan** (`reviewed_digest`), because
+  GitHub environments aren't available to private repos on GitHub Free. Keep that gate.
+- **Azure trusts only tokens from `azure-ipam-deploy.yaml` run from `main`**: the repo's OIDC
+  subject includes `job_workflow_ref`, and the federated credentials pin that file. Never
+  reset the subject template or loosen the credentials to the branch alone. `claude.yaml`
+  mints tokens from `main` too, and the entra identity holds Graph `Directory.ReadWrite.All`.
 - **The pin is `azure-ipam/platform/release.json`** (release, commit, zip SHA-256, Python).
   Change it all together, in a PR. Terraform refuses a zip whose SHA-256 differs.
 - **Keep run-from-package** (`WEBSITE_RUN_FROM_PACKAGE=1`). An Oryx build
@@ -86,7 +97,8 @@ Microsoft's `deploy.ps1`:
   Don't weaken either. **Part 2's state holds the engine secret.**
 - The roots mirror Azure/ipam v3.6.0's `deploy.ps1` and Bicep. On an upgrade, diff upstream's
   `deploy/` between the two releases for new settings, roles or permissions, not just the zip.
-- Changed either root? `make ipam-test`, and `make mutants` after touching a `variables.tf`.
+- Changed either root or `azure-ipam/ci.sh`? `make ipam-test` (both roots and the script), and
+  `make mutants` after touching a `variables.tf`. Changed a workflow? `actionlint`.
 
 ## Connectivity is Virtual WAN's, not AVNM's
 
