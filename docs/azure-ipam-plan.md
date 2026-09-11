@@ -1,7 +1,8 @@
 # Plan: Azure IPAM as the address authority, with AVNM taken on piece by piece
 
-**Status: plan only.** Nothing here is deployed or coded yet. The address model below is
-decided; the inputs and the remaining decisions further down aren't.
+**Status: nothing is deployed.** The address model below is decided, and the installer wrapper
+is built ([`azure-ipam/`](../azure-ipam/README.md), decision 4). The inputs and the other
+decisions further down are still open.
 
 ## Where Aberdeen starts
 
@@ -210,20 +211,24 @@ Azure retail prices, East Asia, 2026-09-11:
 Visual Studio credit subscription it would run out in about a week, and the tfstate account
 would be disabled with it.
 
-### Decision 4: how this repo runs it
+### Decision 4: how this repo runs it (implemented)
 
-**Recommended: the upstream script, pinned** to `v3.6.0`. An `azure-ipam/` folder would hold a
-runbook and Makefile targets with the non-secret options (`-Location eastasia`, `-NamePrefix`,
-`-Tags`). That's Microsoft's supported path, and `update.ps1` upgrades work. It's outside
-Terraform state. The alternatives are a Terraform wrapper around the compiled ARM
-(`azurerm_resource_group_template_deployment` + `azuread`), or a native rewrite. Both are more
-work, and both drift from upstream.
+**The upstream script, pinned: see [`azure-ipam/`](../azure-ipam/README.md)** (the runbook,
+`ipam.sh`, and the `make ipam-*` targets). It pins release `v3.6.0`, its commit, and the SHA-256
+of its `ipam.zip`, and checks all three on every run. It always installs **native** (`-Native
+-ZipFilePath`), because the default container install runs `ipam:latest` and would ignore the
+pin. Part 2 refuses credit subscriptions, and won't run without `IPAM_CONFIRM_COST=yes`.
+
+It's outside Terraform state. The alternatives were a Terraform wrapper around the compiled
+ARM (`azurerm_resource_group_template_deployment` + `azuread`), or a native rewrite. Both are
+more work, and both drift from upstream.
 
 ### Operating it
 
 - Rotate the engine secret before its 2-year expiry. Put that in the runbook, because nothing
   reminds you.
-- Upgrade with `update.ps1`.
+- Upgrade with `make ipam-update`, after bumping the pins in `azure-ipam/settings.sh`. Don't run
+  bare `update.ps1`: without `-ZipFilePath` it downloads `releases/latest`.
 - Teardown means the resource group **and** both app registrations. The app registrations are
   tenant objects and outlive the resource group.
 

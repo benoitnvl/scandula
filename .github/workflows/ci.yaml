@@ -60,6 +60,16 @@ jobs:
         working-directory: infra
         run: terraform test
 
+  azure-ipam:
+    name: azure-ipam wrapper
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: shellcheck -x azure-ipam/ipam.sh scripts/test-azure-ipam.sh
+      - name: wrapper tests (stubbed pwsh/git/curl/bicep, no Azure)
+        run: bash scripts/test-azure-ipam.sh
+
   trivy:
     name: trivy
     runs-on: ubuntu-latest
