@@ -50,7 +50,7 @@ validate() {
   re='^[a-z0-9]+$';                      [[ $IPAM_LOCATION =~ $re ]]    || die "IPAM_LOCATION must be an Azure region name, e.g. eastasia"
   re='^[a-z0-9]{1,7}$';                  [[ $IPAM_NAME_PREFIX =~ $re ]] || die "IPAM_NAME_PREFIX must be 1-7 lowercase letters or digits"
   re='^[A-Za-z0-9][A-Za-z0-9-]{0,62}$'
-  [[ $IPAM_UI_APP_NAME =~ $re ]] && [[ $IPAM_ENGINE_APP_NAME =~ $re ]] || die "app registration names may only use letters, digits and hyphens"
+  [[ $IPAM_UI_APP_NAME =~ $re && $IPAM_ENGINE_APP_NAME =~ $re ]] || die "app registration names may only use letters, digits and hyphens"
   re='^[A-Za-z0-9._()-]*$';              [[ $IPAM_MGMT_GROUP =~ $re ]]  || die "IPAM_MGMT_GROUP may only use letters, digits and . _ ( ) -"
   case $IPAM_DISABLE_UI in true|false) ;; *) die "IPAM_DISABLE_UI must be true or false" ;; esac
   case $WORK in *"'"*) die "IPAM_WORK_DIR must not contain a single quote" ;; esac

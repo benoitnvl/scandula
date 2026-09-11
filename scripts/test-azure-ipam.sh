@@ -128,6 +128,15 @@ ok "  before calling anything"                                     empty "$LOG"
 fresh; run IPAM_DISABLE_UI=maybe -- fetch
 ok "refuses IPAM_DISABLE_UI other than true/false" failed
 
+# Each name on its own: one good name must not let the other through.
+fresh; run "IPAM_UI_APP_NAME=ui'; Remove-Item /" -- fetch
+ok "refuses a bad UI app name"     failed
+ok "  before calling anything"     empty "$LOG"
+
+fresh; run "IPAM_ENGINE_APP_NAME=engine name" -- fetch
+ok "refuses a bad engine app name" failed
+ok "  before calling anything"     empty "$LOG"
+
 # --- check ------------------------------------------------------------------------
 echo "check"
 fresh; run -- check
