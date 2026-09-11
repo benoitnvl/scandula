@@ -66,3 +66,29 @@ output: ## terraform output
 .PHONY: lock
 lock: ## Regenerate .terraform.lock.hcl for CI (linux_amd64) and Macs (darwin_arm64)
 	$(TF) -chdir=$(TF_DIR) providers lock -platform=linux_amd64 -platform=darwin_arm64
+
+## --- Azure IPAM (azure-ipam/README.md). Not Terraform: ARM owns these resources. ---
+
+.PHONY: ipam-fetch
+ipam-fetch: ## Azure IPAM: clone the pinned release; verify its commit and zip checksum
+	./azure-ipam/ipam.sh fetch
+
+.PHONY: ipam-check
+ipam-check: ## Azure IPAM: check pwsh, Az/Graph modules, bicep and the Azure PowerShell context
+	./azure-ipam/ipam.sh check
+
+.PHONY: ipam-apps
+ipam-apps: ## Azure IPAM part 1 (tenant admin): app registrations -> azure-ipam/.work/main.parameters.json
+	./azure-ipam/ipam.sh apps
+
+.PHONY: ipam-infra
+ipam-infra: ## Azure IPAM part 2: deploy (about USD 170-250/month; needs IPAM_CONFIRM_COST=yes)
+	./azure-ipam/ipam.sh infra
+
+.PHONY: ipam-update
+ipam-update: ## Azure IPAM: zip-deploy the pinned release (IPAM_APP_NAME, IPAM_RESOURCE_GROUP)
+	./azure-ipam/ipam.sh update
+
+.PHONY: ipam-test
+ipam-test: ## Test the Azure IPAM wrapper against stubs (no Azure, no network)
+	bash scripts/test-azure-ipam.sh

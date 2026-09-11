@@ -21,6 +21,11 @@ backend.hcl
 .env
 .env.local
 
+# Azure IPAM wrapper workspace: the upstream clone, the release zip, and
+# main.parameters.json, which holds the engine app registration's client secret.
+azure-ipam/.work/
+main.parameters.json
+
 # Keys that stray in
 *.pem
 *.key

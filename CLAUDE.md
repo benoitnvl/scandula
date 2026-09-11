@@ -59,6 +59,17 @@ repo's `ipam_root_prefix`. Workloads move under AVNM piece by piece.
   only.
 - Never make Azure IPAM reservations inside AVNM's block. AVNM can't see them.
 
+Azure IPAM is deployed by `azure-ipam/` (`make ipam-*`, runbook in its README), not Terraform:
+
+- **Keep it native.** Don't switch it to Microsoft's container install, which runs `ipam:latest`
+  and ignores the pin.
+- **Change the three pins together** (release, commit, zip SHA-256) in `azure-ipam/settings.sh`,
+  in a PR.
+- **`main.parameters.json` holds the engine's client secret.** It's gitignored and must never
+  be printed or committed.
+- **Part 2 is cost-guarded,** like `secured_vwan_enabled`. Don't weaken the guard.
+- **Changed `ipam.sh`? Run `make ipam-test`** and add a case for the change.
+
 ## Connectivity is Virtual WAN's, not AVNM's
 
 Standard vWAN meshes its hubs itself, and spokes attach with
