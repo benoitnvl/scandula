@@ -50,3 +50,16 @@ output "onprem_policy_assignment_id" {
   description = "The assignment of the on-premises overlap policy. Null while onprem_policy.management_group_id is unset."
   value       = one(azurerm_management_group_policy_assignment.onprem_overlap[*].id)
 }
+
+output "avnm_allocation_policy_definition_id" {
+  description = "The AVNM allocation policy's definition. Null while avnm_allocation_policy.management_group_id is unset."
+  value       = one(azurerm_policy_definition.avnm_allocation[*].id)
+}
+
+output "avnm_allocation_policy_assignment_ids" {
+  description = "Assignment key => assignment id, one per migrated scope."
+  value = merge(
+    { for k, a in azurerm_management_group_policy_assignment.avnm_allocation : k => a.id },
+    { for k, a in azurerm_subscription_policy_assignment.avnm_allocation : k => a.id },
+  )
+}

@@ -240,3 +240,64 @@ variable "onprem_policy" {
     error_message = "onprem_policy can check at most 100 reserved_prefixes (Azure Policy's value count limit): merge them into larger ranges."
   }
 }
+
+variable "avnm_allocation_policy" {
+  description = <<-EOT
+    The Azure Policy that makes every VNet in a migrated scope take its address space
+    from this repo's AVNM IPAM region pools (layer B in docs/azure-ipam-plan.md). OFF
+    until management_group_id is set.
+
+      management_group_id  full id of the management group the definition lives in. It
+                           must contain every assignment scope below.
+      assignments          one entry per migrated scope, added as each one migrates.
+                           Key: 1-19 lowercase letters, digits or hyphens (the
+                           assignment is named avnm-<key>).
+        scope        a management group or subscription id. NEVER the landing-zone
+                     root while VNets outside AVNM still live under it.
+        effect       Audit (default) or Deny. Under Deny, Azure refuses any create or
+                     update of a VNet without an allocation, including one that exists.
+        not_scopes   exclusions, e.g. a service's managed resource group whose VNets
+                     it creates itself.
+
+    The identity running Terraform needs Resource Policy Contributor there.
+  EOT
+  type = object({
+    management_group_id = optional(string)
+    assignments = optional(map(object({
+      scope      = string
+      effect     = optional(string, "Audit")
+      not_scopes = optional(list(string), [])
+    })), {})
+  })
+  default  = {}
+  nullable = false
+
+  validation {
+    condition     = var.avnm_allocation_policy.management_group_id == null || can(regex("^/providers/Microsoft.Management/managementGroups/[^/]+$", var.avnm_allocation_policy.management_group_id))
+    error_message = "avnm_allocation_policy.management_group_id must be a full id: /providers/Microsoft.Management/managementGroups/<name>."
+  }
+
+  validation {
+    condition     = length(var.avnm_allocation_policy.assignments) == 0 || var.avnm_allocation_policy.management_group_id != null
+    error_message = "avnm_allocation_policy.assignments need management_group_id: the definition has to live somewhere above them."
+  }
+
+  validation {
+    condition = alltrue([for a in values(var.avnm_allocation_policy.assignments) :
+      can(regex("^/providers/Microsoft.Management/managementGroups/[^/]+$", a.scope)) ||
+      can(regex("^/subscriptions/[0-9a-fA-F-]{36}$", a.scope))
+    ])
+    error_message = "Every avnm_allocation_policy assignment scope must be a management group (/providers/Microsoft.Management/managementGroups/<name>) or a subscription (/subscriptions/<guid>)."
+  }
+
+  validation {
+    condition     = alltrue([for a in values(var.avnm_allocation_policy.assignments) : contains(["Audit", "Deny"], a.effect)])
+    error_message = "Every avnm_allocation_policy assignment effect must be Audit or Deny."
+  }
+
+  # avnm-<key>: management-group assignment names are 24 characters at most.
+  validation {
+    condition     = alltrue([for k in keys(var.avnm_allocation_policy.assignments) : can(regex("^[a-z0-9-]{1,19}$", k))])
+    error_message = "avnm_allocation_policy assignment keys must be 1-19 lowercase letters, digits or hyphens."
+  }
+}

@@ -109,7 +109,9 @@ anything on-premises is connected, put its ranges in `reserved_prefixes` (empty 
 default); a validation then keeps the root clear of them. That only keeps *this repo's*
 allocations clear. To stop anyone creating a VNet on those ranges, `onprem_policy` assigns
 an Azure Policy at a management group (`infra/policy-onprem.tf`, off by default; see
-[layer A](azure-ipam-plan.md#layer-a-on-premises-ranges-everywhere-from-day-one)).
+[layer A](azure-ipam-plan.md#layer-a-on-premises-ranges-everywhere-from-day-one)). Once a
+scope has migrated, `avnm_allocation_policy` requires its VNets to allocate from the region
+pools (`infra/policy-avnm.tf`, [layer B](azure-ipam-plan.md#layer-b-avnm-only-allocation-per-migrated-scope)).
 
 ## Regions
 

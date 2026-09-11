@@ -21,6 +21,18 @@ ipam_root_prefix = "10.64.0.0/12" # 10.64.0.0 – 10.79.255.255
 #   effect              = "Audit" # or "Deny"
 # }
 
+# Azure Policy: VNets in a migrated scope must take their space from the region
+# pools. Define it once, then add each scope as it migrates. NEVER the landing-zone
+# root while VNets outside AVNM live under it. Keep Audit until its findings are
+# reviewed.
+# avnm_allocation_policy = {
+#   management_group_id = "/providers/Microsoft.Management/managementGroups/<name>"
+#   assignments = {
+#     corp = { scope = "/providers/Microsoft.Management/managementGroups/<migrated mg>" }
+#     app1 = { scope = "/subscriptions/<id>", effect = "Deny", not_scopes = [] }
+#   }
+# }
+
 # Each region gets an IPAM pool, and — when secured_vwan_enabled — a secured hub on
 # hub_address_prefix, which is reserved in that pool either way.
 #
