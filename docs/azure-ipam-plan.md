@@ -64,22 +64,23 @@ And in the Entra ID tenant (`deploy.ps1`):
    tenant root management group**, to grant the engine its Reader role.
 3. **Global Administrator**, for admin consent on the app registrations.
 
-benoit@nuvulu.cloud currently has Contributor + User Access Administrator on `Aberdeen_VSPS`,
-and isn't Global Administrator. So **a single-pass install isn't possible from this account.**
+The deploying account currently has Contributor + User Access Administrator on Aberdeen's
+management group (not the tenant root), and isn't Global Administrator. So **a single-pass
+install isn't possible from it.**
 Azure IPAM supports that case with a two-part install:
 
 - **Part 1 (identities)**, run by an Aberdeen tenant administrator: `deploy.ps1 -AppsOnly`.
   It creates the app registrations and role assignments, and writes `main.parameters.json`.
 - **Part 2 (infrastructure)**, run by us: `deploy.ps1 -ParameterFile main.parameters.json`.
   It needs subscription-level role-assignment rights. Contributor + User Access Administrator
-  inherited from `Aberdeen_VSPS` should cover what Owner is asked for here; confirm on the
-  first run.
+  inherited from Aberdeen's management group should cover what Owner is asked for here;
+  confirm on the first run.
 
 ⚠ `main.parameters.json` carries the engine's client secret. It must be handed over securely
 and never committed.
 
-`-MgmtGroupId Aberdeen_VSPS` would scope the engine's Reader role to Aberdeen's management group
-instead of the whole tenant. Microsoft's docs *highly discourage* a non-root group, but it
+`-MgmtGroupId <Aberdeen's management group>` would scope the engine's Reader role to that
+group instead of the whole tenant. Microsoft's docs *highly discourage* a non-root group, but it
 keeps discovery inside Aberdeen, so it's worth deciding deliberately.
 
 ## Decision 3: cost
@@ -135,6 +136,6 @@ in scandula's Terraform tests.
   AVNM IPAM already enforces the plan that scandula owns.
 - Who in Aberdeen can run part 1 (Global Administrator plus the root management group), and
   will they approve `Directory.Read.All`?
-- Tenant-wide discovery (root management group), or `Aberdeen_VSPS` only?
+- Tenant-wide discovery (root management group), or Aberdeen's management group only?
 - UI or API only (`-DisableUI`)? API only needs no Graph `Directory.Read.All` consent.
 - Which paid subscription?
