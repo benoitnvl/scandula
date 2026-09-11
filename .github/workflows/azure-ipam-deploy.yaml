@@ -3,7 +3,8 @@ name: azure-ipam deploy
 # Azure IPAM (azure-ipam/) is planned and applied ONLY by this workflow, never from a
 # workstation. Run it by hand, from main: Actions -> azure-ipam deploy -> Run workflow.
 #
-#   1. Plan: leave reviewed_digest empty. The job summary shows the plan and its digest.
+#   1. Plan: leave reviewed_digest empty. The job summary shows the plan and its digest;
+#      the digest is also a notice annotation, so `gh run view` shows it in a terminal.
 #   2. Apply: run it again, with the same part and destroy setting, and reviewed_digest
 #      set to that digest. It plans again and applies only if the new plan has the same
 #      digest, so what gets applied is exactly what was reviewed. If anything changed in
@@ -132,6 +133,8 @@ jobs:
           echo "DIGEST=$digest" >> "$GITHUB_ENV"
           kind=plan
           if [ "$DESTROY" = true ]; then kind="destroy plan"; fi
+          # An annotation too: `gh run view` shows annotations, not the job summary.
+          echo "::notice title=Azure IPAM $PART $kind digest::$digest"
           {
             echo "## Azure IPAM $PART: $kind"
             echo
