@@ -45,6 +45,20 @@ Validations keep it canonical, /24 or larger, and inside its own region pool. Th
 pool must never overlap `reserved_prefixes`: on-premises ranges, empty until someone sets
 them.
 
+## ⚠ The address authority is Azure IPAM (planned), not this repo
+
+Decided 2026-09-11 (`docs/azure-ipam-plan.md`). Microsoft's Azure IPAM becomes the source of
+truth for **all** of Aberdeen's address space: the existing Enterprise-Scale landing zones
+(no AVNM), the on-premises RFC 1918 ranges, and **one block delegated to AVNM**, which is this
+repo's `ipam_root_prefix`. Workloads move under AVNM piece by piece.
+
+- `10.64.0.0/12` is a **placeholder**. Don't apply until it's checked against the landing-zone
+  and on-premises ranges.
+- *Reserved* (IPAM, `reserved_prefixes`) isn't *blocked*. Blocking needs Azure Policy: layer A
+  denies on-premises ranges everywhere, and layer B enforces AVNM allocation per migrated scope
+  only.
+- Never make Azure IPAM reservations inside AVNM's block. AVNM can't see them.
+
 ## Connectivity is Virtual WAN's, not AVNM's
 
 Standard vWAN meshes its hubs itself, and spokes attach with
