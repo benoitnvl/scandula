@@ -1,7 +1,8 @@
 # Plan: Azure IPAM as the address authority, with AVNM taken on piece by piece
 
-**Status: plan only.** Nothing here is deployed or coded yet. The address model below is
-decided; the inputs and the remaining decisions further down aren't.
+**Status: nothing is deployed.** The address model below is decided, and the installer wrapper
+is built ([`azure-ipam/`](../azure-ipam/README.md), decision 4). The inputs and the other
+decisions further down are still open.
 
 ## Where Aberdeen starts
 
