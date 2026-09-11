@@ -46,6 +46,14 @@ under that management group; see [layer A of the plan](docs/azure-ipam-plan.md#l
 | Policy definition | `scandula-deny-onprem-overlap` | at that management group: no VNet may overlap a `reserved_prefixes` range |
 | Policy assignment | `scandula-onprem` | same management group; effect **Audit** until `onprem_policy.effect = "Deny"` |
 
+Only with **`avnm_allocation_policy.management_group_id`** set (off by default; see [layer B of
+the plan](docs/azure-ipam-plan.md#layer-b-avnm-only-allocation-per-migrated-scope)):
+
+| Resource | Name | Notes |
+|----------|------|-------|
+| Policy definition | `scandula-require-avnm-allocation` | at that management group: a VNet must hold an allocation from the region pools, and none from any other pool |
+| Policy assignment | `avnm-<key>` | one per migrated scope in `assignments` (management group or subscription), each **Audit** until its `effect = "Deny"` |
+
 ## Layout
 
 ```
@@ -59,7 +67,8 @@ infra/
   vwan.tf            vWAN, hubs, firewall policy, hub firewalls, routing intent (gated)
   firewall-rules.tf  baseline rule collection group on the shared policy (gated)
   policy-onprem.tf   Azure Policy: no VNet may overlap reserved_prefixes (gated)
-  outputs.tf         pool ids, hub ids + firewall IPs, firewall policy id, policy assignment id
+  policy-avnm.tf     Azure Policy: VNets in migrated scopes must allocate from AVNM IPAM (gated)
+  outputs.tf         pool ids, hub ids + firewall IPs, firewall policy id, policy ids
   tests/             terraform test — mocked azurerm, no credentials
   backend.hcl.example
   terraform.tfvars.example

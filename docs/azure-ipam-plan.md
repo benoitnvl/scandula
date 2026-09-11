@@ -1,8 +1,9 @@
 # Plan: Azure IPAM as the address authority, with AVNM taken on piece by piece
 
-**Status: nothing is deployed.** The address model below is decided. Two parts are built: Azure
-IPAM's deployment as Terraform ([`azure-ipam/`](../azure-ipam/README.md), decision 4) and layer A's policy
-([`infra/policy-onprem.tf`](../infra/policy-onprem.tf)). The inputs and the other decisions
+**Status: nothing is deployed.** The address model below is decided. Built so far: Azure
+IPAM's deployment as Terraform ([`azure-ipam/`](../azure-ipam/README.md), decision 4), and the
+policies for layer A ([`infra/policy-onprem.tf`](../infra/policy-onprem.tf)) and layer B
+([`infra/policy-avnm.tf`](../infra/policy-avnm.tf)). The inputs and the other decisions
 further down are still open.
 
 ## Where Aberdeen starts
@@ -112,6 +113,46 @@ This is Microsoft's pattern from "Prevent overlapping virtual network address sp
 Policy and IPAM": **deny any VNet that doesn't hold an allocation from the designated AVNM IPAM
 pools.** Assign it to **each subscription or management group once it has migrated**, and never
 at the landing-zone root while VNets outside AVNM still live there. It would deny them all.
+
+**It's code: [`infra/policy-avnm.tf`](../infra/policy-avnm.tf).** It's off until
+`avnm_allocation_policy.management_group_id` is set, which creates the definition. Each
+migrated scope then gets an entry in `assignments`, with its own effect (Audit by default) and
+exclusions:
+
+```hcl
+avnm_allocation_policy = {
+  management_group_id = "/providers/Microsoft.Management/managementGroups/<landing-zone root>"
+  assignments = {
+    corp = { scope = "/providers/Microsoft.Management/managementGroups/<migrated mg>" }
+    app1 = {
+      scope      = "/subscriptions/<migrated subscription>"
+      effect     = "Deny"                                # after Audit came back clean
+      not_scopes = ["/subscriptions/<id>/resourceGroups/<a service's managed RG>"]
+    }
+  }
+}
+```
+
+Terraform checks at plan that each scope is the definition's management group or sits under it,
+against the real hierarchy. Azure can't assign a definition anywhere else.
+
+A VNet is non-compliant if it holds no allocation from scandula's region pools, or holds one
+from any other pool.
+
+⚠ **Microsoft's sample rule doesn't do what its page says.** It tests
+`ipamPoolPrefixAllocations[*].pool.id` with bare `[*]` conditions. Per Azure Policy's array docs,
+a `[*]` condition over an empty or missing array is **true**, so the sample never flags a VNet
+with no allocation at all, which is exactly the VNet it exists to stop. The code uses count
+expressions instead, as those docs recommend. The tests pin both of its checks.
+
+Before switching a scope to Deny:
+
+- Check what Audit found. VNets that were *associated* with a pool rather than created from
+  one have to show an allocation too.
+- Exempt service-managed VNets with `not_scopes`.
+
+Not checked: a static address prefix added next to an allocation. It isn't verified whether Azure
+accepts that mix. Layer A still keeps on-premises ranges out either way.
 
 ## Migration order
 

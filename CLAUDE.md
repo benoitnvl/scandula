@@ -64,6 +64,11 @@ repo's `ipam_root_prefix`. Workloads move under AVNM piece by piece.
   **Keep the same-family `if()` guard** in its rule: `ipRangeContains` fails on mixed
   address families, and a failed evaluation is a deny even under Audit. Without the guard,
   every dual-stack VNet is blocked.
+- **Layer B is `infra/policy-avnm.tf`**, off until `avnm_allocation_policy.management_group_id`
+  is set. Add an assignment only for a scope that has fully migrated, never the landing-zone
+  root while VNets outside AVNM live under it, and only with the user's say-so.
+  **Keep the count expressions:** Microsoft's sample uses bare `[*]` conditions, which are true
+  over an empty array, so it lets through a VNet with no allocation at all.
 
 Azure IPAM is deployed by two Terraform roots in `azure-ipam/` (runbook in its README), not by
 Microsoft's `deploy.ps1`:
