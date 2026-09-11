@@ -1,8 +1,9 @@
 # Plan: Azure IPAM as the address authority, with AVNM taken on piece by piece
 
-**Status: nothing is deployed.** The address model below is decided, and the installer wrapper
-is built ([`azure-ipam/`](../azure-ipam/README.md), decision 4). The inputs and the other
-decisions further down are still open.
+**Status: nothing is deployed.** The address model below is decided. Two parts are built: the
+installer wrapper ([`azure-ipam/`](../azure-ipam/README.md), decision 4) and layer A's policy
+([`infra/policy-onprem.tf`](../infra/policy-onprem.tf)). The inputs and the other decisions
+further down are still open.
 
 ## Where Aberdeen starts
 
@@ -81,48 +82,29 @@ alike. It **denies any VNet whose address space overlaps an on-premises range**,
 direction: a VNet inside an on-premises range, or one that contains it. Subnets always sit
 inside their VNet's address space, so blocking VNet prefixes covers subnets too.
 
-Starting point, built on Azure Policy's documented `ipRangeContains(range, targetRange)`. Test
-it in **Audit** first, then switch to **Deny**:
+**It's code: [`infra/policy-onprem.tf`](../infra/policy-onprem.tf)**, off until
+`onprem_policy.management_group_id` is set. It takes its ranges from `reserved_prefixes`, so
+the IPAM overlap check and the policy can't disagree, and it starts in **Audit**:
 
-```json
-{
-  "mode": "All",
-  "parameters": {
-    "onPremRanges": { "type": "Array", "metadata": { "displayName": "On-premises RFC 1918 ranges" } },
-    "effect": { "type": "String", "allowedValues": ["Audit", "Deny"], "defaultValue": "Audit" }
-  },
-  "policyRule": {
-    "if": {
-      "allOf": [
-        { "field": "type", "equals": "Microsoft.Network/virtualNetworks" },
-        {
-          "count": {
-            "field": "Microsoft.Network/virtualNetworks/addressSpace.addressPrefixes[*]",
-            "where": {
-              "count": {
-                "value": "[parameters('onPremRanges')]",
-                "name": "onPrem",
-                "where": {
-                  "anyOf": [
-                    { "value": "[ipRangeContains(current('onPrem'), current('Microsoft.Network/virtualNetworks/addressSpace.addressPrefixes[*]'))]", "equals": true },
-                    { "value": "[ipRangeContains(current('Microsoft.Network/virtualNetworks/addressSpace.addressPrefixes[*]'), current('onPrem'))]", "equals": true }
-                  ]
-                }
-              },
-              "greater": 0
-            }
-          },
-          "greater": 0
-        }
-      ]
-    },
-    "then": { "effect": "[parameters('effect')]" }
-  }
+```hcl
+reserved_prefixes = ["<on-premises ranges>"]
+onprem_policy = {
+  management_group_id = "/providers/Microsoft.Management/managementGroups/<landing-zone root>"
+  # effect = "Deny"   # only after reviewing what Audit found
 }
 ```
 
+The identity that applies it needs **Resource Policy Contributor** at that management group.
+
+⚠ **The first draft of this rule, in this document, would have blocked every dual-stack
+VNet.** `ipRangeContains` fails when its two ranges are different address families, and Azure
+Policy treats a failed evaluation as a deny, **even under Audit**. The code only compares
+ranges of the same family, inside `if()`, which Azure Policy documents as evaluating only the
+branch it picks. The tests pin that guard exactly.
+
 Before switching to Deny, check the Audit results. An existing VNet that already overlaps
-on-premises is a real finding to fix, not one to exempt quietly.
+on-premises is a real finding to fix, not one to exempt quietly. Under Deny, Azure refuses
+any create or update of an overlapping VNet, including updates to one that already exists.
 
 ### Layer B: AVNM-only allocation, per migrated scope
 

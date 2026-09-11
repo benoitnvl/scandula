@@ -38,6 +38,14 @@ hub**, see [docs/design.md](docs/design.md#cost)):
 | Azure Firewall | `afw-scandula-<region>` | `AZFW_Hub`, tier `firewall_sku_tier` (default **Basic**) |
 | Routing intent | `ri-scandula-<region>` | internet **and** private traffic through that hub's firewall |
 
+Only with **`onprem_policy.management_group_id`** set (off by default: it reaches every VNet
+under that management group; see [layer A of the plan](docs/azure-ipam-plan.md#layer-a-on-premises-ranges-everywhere-from-day-one)):
+
+| Resource | Name | Notes |
+|----------|------|-------|
+| Policy definition | `scandula-deny-onprem-overlap` | at that management group: no VNet may overlap a `reserved_prefixes` range |
+| Policy assignment | `scandula-onprem` | same management group; effect **Audit** until `onprem_policy.effect = "Deny"` |
+
 ## Layout
 
 ```
@@ -50,17 +58,20 @@ infra/
   ipam.tf            root pool, region pools, hub reservations, static CIDRs
   vwan.tf            vWAN, hubs, firewall policy, hub firewalls, routing intent (gated)
   firewall-rules.tf  baseline rule collection group on the shared policy (gated)
-  outputs.tf         pool ids, hub ids + firewall IPs, policy id
+  policy-onprem.tf   Azure Policy: no VNet may overlap reserved_prefixes (gated)
+  outputs.tf         pool ids, hub ids + firewall IPs, firewall policy id, policy assignment id
   tests/             terraform test — mocked azurerm, no credentials
   backend.hcl.example
   terraform.tfvars.example
+azure-ipam/          pinned wrapper around Microsoft's Azure IPAM installer (`make ipam-*`)
 docs/
   bootstrap.md       one-time: state account, RP registration, first apply
   design.md          topology, address plan, cost, what's deliberately not here yet
-  azure-ipam-plan.md plan (not built) for a second deployment: Microsoft's Azure IPAM
+  azure-ipam-plan.md the address authority: Azure IPAM, the on-premises policy, migration
   diagrams/          architecture.drawio + the exported architecture.svg (`make diagram`)
 scripts/
   validation-mutants.py   `make mutants`: proves every validation is actually tested
+  test-azure-ipam.sh      `make ipam-test`: the azure-ipam wrapper against stubs
 ```
 
 ## Quickstart
@@ -83,12 +94,13 @@ make init-local && make test
 
 `terraform test` runs against a **mocked azurerm**, so it needs no Azure access. It
 checks that nothing billable is planned while the cost guard is off, what gets built
-when it's on (hubs, firewalls, routing intent), and that every validation rejects
-what it should. `make mutants` proves each validation is load-bearing.
+when it's on (hubs, firewalls, routing intent), the on-premises policy's wiring and rule,
+and that every validation rejects what it should. `make mutants` proves each validation
+is load-bearing.
 
 CI (GitHub-hosted `ubuntu-latest`: stazzona has no runner scale set for this repo) runs
-`terraform fmt -check`, `validate`, `test` and a trivy misconfig + secret scan on every
-PR. **CI never touches Azure.** `make apply` from a workstation is the only write path.
+`terraform fmt -check`, `validate`, `test`, the azure-ipam wrapper's tests and a trivy
+misconfig + secret scan on every PR. **CI never touches Azure.** `make apply` from a workstation is the only write path.
 
 A separate `claude` workflow has Claude review every non-draft PR and answer `@claude`
 comments. It authenticates with the `CLAUDE_CODE_OAUTH_TOKEN` repo secret, so its usage

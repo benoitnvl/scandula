@@ -45,3 +45,8 @@ output "firewall_policy_id" {
   description = "The policy shared by every hub firewall — add rule collection groups to it. Null while off."
   value       = one(azurerm_firewall_policy.this[*].id)
 }
+
+output "onprem_policy_assignment_id" {
+  description = "The assignment of the on-premises overlap policy. Null while onprem_policy.management_group_id is unset."
+  value       = one(azurerm_management_group_policy_assignment.onprem_overlap[*].id)
+}

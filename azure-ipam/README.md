@@ -115,8 +115,8 @@ Configure the address model in the Azure IPAM UI, or through its API, as in the 
 4. **One block for AVNM**, matching `infra/`'s `ipam_root_prefix`. **Never make Azure IPAM
    reservations inside it.** AVNM can't see them.
 
-Blocking the on-premises ranges needs Azure Policy (the plan's layer A). Azure IPAM only
-records them.
+Blocking the on-premises ranges needs Azure Policy (the plan's layer A): that's
+`onprem_policy` in `infra/` (`infra/policy-onprem.tf`). Azure IPAM only records them.
 
 ## Upgrading
 

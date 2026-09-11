@@ -12,6 +12,15 @@ ipam_root_prefix = "10.64.0.0/12" # 10.64.0.0 – 10.79.255.255
 # connecting anything over VPN or ExpressRoute.
 # reserved_prefixes = ["192.168.0.0/16"]
 
+# Azure Policy: no VNet under this management group may overlap reserved_prefixes.
+# Off until management_group_id is set. It reaches every VNet under the management
+# group, so only with its policy owner's agreement, and needs Resource Policy
+# Contributor there. Keep Audit until its findings are reviewed.
+# onprem_policy = {
+#   management_group_id = "/providers/Microsoft.Management/managementGroups/<name>"
+#   effect              = "Audit" # or "Deny"
+# }
+
 # Each region gets an IPAM pool, and — when secured_vwan_enabled — a secured hub on
 # hub_address_prefix, which is reserved in that pool either way.
 #

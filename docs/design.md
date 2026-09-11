@@ -106,7 +106,10 @@ start of its region pool so the rest of the /14 is one contiguous block for spok
 Why `10.64.0.0/12`: it stays clear of Azure's own `10.0.0.0/16` default and of the
 Kubernetes default pod and service ranges (`10.244.0.0/16`, `10.96.0.0/12`). Before
 anything on-premises is connected, put its ranges in `reserved_prefixes` (empty by
-default); a validation then keeps the root clear of them.
+default); a validation then keeps the root clear of them. That only keeps *this repo's*
+allocations clear. To stop anyone creating a VNet on those ranges, `onprem_policy` assigns
+an Azure Policy at a management group (`infra/policy-onprem.tf`, off by default; see
+[layer A](azure-ipam-plan.md#layer-a-on-premises-ranges-everywhere-from-day-one)).
 
 ## Regions
 
