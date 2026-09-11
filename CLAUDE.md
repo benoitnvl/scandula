@@ -58,6 +58,12 @@ repo's `ipam_root_prefix`. Workloads move under AVNM piece by piece.
   denies on-premises ranges everywhere, and layer B enforces AVNM allocation per migrated scope
   only.
 - Never make Azure IPAM reservations inside AVNM's block. AVNM can't see them.
+- **Layer A is `infra/policy-onprem.tf`**, off until `onprem_policy.management_group_id` is
+  set. It reaches every VNet under that management group, far beyond this repo, so never
+  set it without the user saying so. Move Audit → Deny only after its findings are reviewed.
+  **Keep the same-family `if()` guard** in its rule: `ipRangeContains` fails on mixed
+  address families, and a failed evaluation is a deny even under Audit. Without the guard,
+  every dual-stack VNet is blocked.
 
 Azure IPAM is deployed by `azure-ipam/` (`make ipam-*`, runbook in its README), not Terraform:
 

@@ -196,3 +196,47 @@ variable "root_static_cidrs" {
     error_message = "Every root_static_cidrs prefix must be a canonical CIDR inside ipam_root_prefix."
   }
 }
+
+variable "onprem_policy" {
+  description = <<-EOT
+    The Azure Policy that stops any VNet under a management group from overlapping
+    reserved_prefixes (layer A in docs/azure-ipam-plan.md). OFF until
+    management_group_id is set. It reaches every VNet under that management group,
+    far beyond this repo, so the owner of policy there decides. The identity running
+    Terraform needs Resource Policy Contributor at that management group.
+
+      management_group_id  full id: /providers/Microsoft.Management/managementGroups/<name>.
+                           The definition and its assignment both live there.
+      effect               Audit (the default) or Deny. Start with Audit and review what it
+                           finds. Under Deny, Azure refuses any create or update of an
+                           overlapping VNet, including one that already exists.
+  EOT
+  type = object({
+    management_group_id = optional(string)
+    effect              = optional(string, "Audit")
+  })
+  default  = {}
+  nullable = false
+
+  validation {
+    condition     = var.onprem_policy.management_group_id == null || can(regex("^/providers/Microsoft.Management/managementGroups/[^/]+$", var.onprem_policy.management_group_id))
+    error_message = "onprem_policy.management_group_id must be a full id: /providers/Microsoft.Management/managementGroups/<name>."
+  }
+
+  validation {
+    condition     = contains(["Audit", "Deny"], var.onprem_policy.effect)
+    error_message = "onprem_policy.effect must be Audit or Deny."
+  }
+
+  # With no ranges the policy would allow every VNet while looking like protection.
+  validation {
+    condition     = var.onprem_policy.management_group_id == null || length(var.reserved_prefixes) > 0
+    error_message = "onprem_policy needs reserved_prefixes: with no on-premises ranges it would allow every VNet."
+  }
+
+  # The rule loops over the ranges with a value count, which Azure Policy caps at 100.
+  validation {
+    condition     = var.onprem_policy.management_group_id == null || length(var.reserved_prefixes) <= 100
+    error_message = "onprem_policy can check at most 100 reserved_prefixes (Azure Policy's value count limit): merge them into larger ranges."
+  }
+}
