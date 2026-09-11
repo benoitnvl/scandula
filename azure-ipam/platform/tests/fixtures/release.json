@@ -1,0 +1,7 @@
+{
+  "version": "v0.0.0-test",
+  "commit": "0000000000000000000000000000000000000000",
+  "zip_url": "https://example.invalid/ipam.zip",
+  "zip_sha256": "4870da136728cc20a3ce1a47d8d3641f8a5b819321ccc051585fcb5f80c4f5f9",
+  "python_version": "3.11"
+}

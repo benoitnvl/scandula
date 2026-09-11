@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars (gitignored) and adjust. Part 1: run by an Aberdeen
+# tenant administrator (azure-ipam/README.md).
+
+# Who runs part 2 (azure-ipam/platform). They become owners of both app
+# registrations, so part 2 can create the engine secret and set the UI redirect URI.
+platform_owner_object_ids = ["<object id>"]
+
+# engine_app_name = "scandula-ipam-engine"
+# ui_app_name     = "scandula-ipam-ui"
+
+# API only: no UI app, and no tenant-wide consent to Directory.Read.All.
+# ui_enabled = false
+
+# The engine gets Reader here to discover VNets. Default: the tenant root.
+# reader_management_group_id = "/providers/Microsoft.Management/managementGroups/<name>"

@@ -1,0 +1,7 @@
+{
+  "version": "v3.6.0",
+  "commit": "12e41f4b93a7e5f3c61a859428c32137440037b2",
+  "zip_url": "https://github.com/Azure/ipam/releases/download/v3.6.0/ipam.zip",
+  "zip_sha256": "0ac8d7cb95eb7b3b13622470aff42a26bda8a3233689938ac16b042ab31c4abe",
+  "python_version": "3.11"
+}

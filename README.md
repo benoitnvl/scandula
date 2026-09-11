@@ -63,7 +63,9 @@ infra/
   tests/             terraform test — mocked azurerm, no credentials
   backend.hcl.example
   terraform.tfvars.example
-azure-ipam/          pinned wrapper around Microsoft's Azure IPAM installer (`make ipam-*`)
+azure-ipam/          Microsoft's Azure IPAM as Terraform (`make ipam-*`; runbook in its README)
+  entra/             part 1: app registrations, consent, Reader (an Aberdeen tenant admin runs it)
+  platform/          part 2: App Service, Cosmos DB, Key Vault, … (gated: costs money)
 docs/
   bootstrap.md       one-time: state account, RP registration, first apply
   design.md          topology, address plan, cost, what's deliberately not here yet
@@ -71,7 +73,6 @@ docs/
   diagrams/          architecture.drawio + the exported architecture.svg (`make diagram`)
 scripts/
   validation-mutants.py   `make mutants`: proves every validation is actually tested
-  test-azure-ipam.sh      `make ipam-test`: the azure-ipam wrapper against stubs
 ```
 
 ## Quickstart
@@ -99,8 +100,8 @@ and that every validation rejects what it should. `make mutants` proves each val
 is load-bearing.
 
 CI (GitHub-hosted `ubuntu-latest`: stazzona has no runner scale set for this repo) runs
-`terraform fmt -check`, `validate`, `test`, the azure-ipam wrapper's tests and a trivy
-misconfig + secret scan on every PR. **CI never touches Azure.** `make apply` from a workstation is the only write path.
+`terraform fmt -check`, then `validate` + `test` for `infra/` and both Azure IPAM roots, and a
+trivy misconfig + secret scan, on every PR. **CI never touches Azure.** `make apply` from a workstation is the only write path.
 
 A separate `claude` workflow has Claude review every non-draft PR and answer `@claude`
 comments. It authenticates with the `CLAUDE_CODE_OAUTH_TOKEN` repo secret, so its usage

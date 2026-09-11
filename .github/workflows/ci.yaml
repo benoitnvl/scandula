@@ -42,8 +42,13 @@ jobs:
         # Hint: run `make fmt` locally and re-push to fix.
 
   validate-test:
-    name: terraform validate + test
+    name: terraform validate + test (${{ matrix.root }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # infra/, and Azure IPAM's two roots (azure-ipam/README.md).
+        root: [infra, azure-ipam/entra, azure-ipam/platform]
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -51,24 +56,14 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
       - name: terraform init (no backend)
-        working-directory: infra
+        working-directory: ${{ matrix.root }}
         run: terraform init -backend=false -input=false
       - name: terraform validate
-        working-directory: infra
+        working-directory: ${{ matrix.root }}
         run: terraform validate
-      - name: terraform test (mocked azurerm)
-        working-directory: infra
+      - name: terraform test (mocked providers)
+        working-directory: ${{ matrix.root }}
         run: terraform test
-
-  azure-ipam:
-    name: azure-ipam wrapper
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: shellcheck
-        run: shellcheck -x azure-ipam/ipam.sh scripts/test-azure-ipam.sh
-      - name: wrapper tests (stubbed pwsh/git/curl/bicep, no Azure)
-        run: bash scripts/test-azure-ipam.sh
 
   trivy:
     name: trivy

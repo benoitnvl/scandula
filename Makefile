@@ -11,7 +11,7 @@ TF_DIR := infra
 
 .PHONY: help
 help: ## Show this help
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 .PHONY: check
 check: ## Confirm Azure auth env + backend config are in place
@@ -44,8 +44,11 @@ test: ## terraform test — plan-only against a mocked azurerm, no Azure creds n
 	$(TF) -chdir=$(TF_DIR) test
 
 .PHONY: mutants
-mutants: ## Disable each validation in turn; some test must go red (run after touching variables.tf)
-	TF=$(TF) python3 scripts/validation-mutants.py $(TF_DIR)
+mutants: ## Disable each validation in turn, in every root; some test must go red (after init-local + ipam-test)
+	@for d in $(TF_DIR) $(IPAM_ENTRA) $(IPAM_PLATFORM); do \
+	  echo "== $$d"; \
+	  TF=$(TF) python3 scripts/validation-mutants.py $$d || exit 1; \
+	done
 
 .PHONY: diagram
 diagram: ## Re-export docs/diagrams/architecture.svg from its .drawio source (needs the draw.io desktop app)
@@ -67,28 +70,65 @@ output: ## terraform output
 lock: ## Regenerate .terraform.lock.hcl for CI (linux_amd64) and Macs (darwin_arm64)
 	$(TF) -chdir=$(TF_DIR) providers lock -platform=linux_amd64 -platform=darwin_arm64
 
-## --- Azure IPAM (azure-ipam/README.md). Not Terraform: ARM owns these resources. ---
+## --- Azure IPAM (azure-ipam/README.md): two Terraform roots ---
+## azure-ipam/entra is part 1 (Entra ID; an Aberdeen tenant administrator runs it).
+## azure-ipam/platform is part 2 (the Azure resources; off until ipam_enabled = true).
+
+IPAM_ENTRA    := azure-ipam/entra
+IPAM_PLATFORM := azure-ipam/platform
+IPAM_RELEASE  := $(IPAM_PLATFORM)/release.json
+IPAM_WORK     := $(IPAM_PLATFORM)/.work
 
 .PHONY: ipam-fetch
-ipam-fetch: ## Azure IPAM: clone the pinned release; verify its commit and zip checksum
-	./azure-ipam/ipam.sh fetch
+ipam-fetch: ## Azure IPAM: download the pinned release zip (release.json) and check its SHA-256
+	@# Every step fails explicitly: macOS's GNU Make 3.81 ignores .SHELLFLAGS, so there's no set -e.
+	@read -r version url sha < <(python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); print(r["version"], r["zip_url"], r["zip_sha256"])' $(IPAM_RELEASE)) \
+	  || { echo "error: can't read $(IPAM_RELEASE)" >&2; exit 1; }; \
+	out="$(IPAM_WORK)/ipam-$$version.zip"; mkdir -p "$(IPAM_WORK)" || exit 1; \
+	if [[ ! -f "$$out" ]]; then \
+	  curl -fsSL --show-error --retry 3 -o "$$out.part" "$$url" || { rm -f "$$out.part"; echo "error: download failed: $$url" >&2; exit 1; }; \
+	  mv "$$out.part" "$$out" || exit 1; \
+	fi; \
+	echo "$$sha  $$out" | shasum -a 256 -c - || { echo "error: $$out isn't the pinned zip. Delete it and re-fetch; if it still differs, the release asset changed upstream: stop and investigate." >&2; exit 1; }
 
-.PHONY: ipam-check
-ipam-check: ## Azure IPAM: check pwsh, Az/Graph modules, bicep and the Azure PowerShell context
-	./azure-ipam/ipam.sh check
+.PHONY: ipam-entra-init
+ipam-entra-init: ## Azure IPAM part 1: terraform init against azure-ipam/entra/backend.hcl
+	@[[ -f $(IPAM_ENTRA)/backend.hcl ]] || { echo "error: $(IPAM_ENTRA)/backend.hcl missing: copy backend.hcl.example (azure-ipam/README.md)" >&2; exit 1; }
+	$(TF) -chdir=$(IPAM_ENTRA) init -backend-config=backend.hcl
 
-.PHONY: ipam-apps
-ipam-apps: ## Azure IPAM part 1 (tenant admin): app registrations -> azure-ipam/.work/main.parameters.json
-	./azure-ipam/ipam.sh apps
+.PHONY: ipam-entra-plan
+ipam-entra-plan: ## Azure IPAM part 1 (tenant admin): plan the Entra ID objects -> tfplan
+	$(TF) -chdir=$(IPAM_ENTRA) plan -out=tfplan
 
-.PHONY: ipam-infra
-ipam-infra: ## Azure IPAM part 2: deploy (about USD 170-250/month; needs IPAM_CONFIRM_COST=yes)
-	./azure-ipam/ipam.sh infra
+.PHONY: ipam-entra-apply
+ipam-entra-apply: ## Azure IPAM part 1: apply the saved plan (and only that plan)
+	$(TF) -chdir=$(IPAM_ENTRA) apply tfplan
 
-.PHONY: ipam-update
-ipam-update: ## Azure IPAM: zip-deploy the pinned release (IPAM_APP_NAME, IPAM_RESOURCE_GROUP)
-	./azure-ipam/ipam.sh update
+.PHONY: ipam-platform-init
+ipam-platform-init: ## Azure IPAM part 2: terraform init against azure-ipam/platform/backend.hcl
+	@[[ -f $(IPAM_PLATFORM)/backend.hcl ]] || { echo "error: $(IPAM_PLATFORM)/backend.hcl missing: copy backend.hcl.example (azure-ipam/README.md)" >&2; exit 1; }
+	$(TF) -chdir=$(IPAM_PLATFORM) init -backend-config=backend.hcl
+
+.PHONY: ipam-platform-plan
+ipam-platform-plan: ## Azure IPAM part 2: plan -> tfplan (with ipam_enabled, run ipam-fetch first)
+	$(TF) -chdir=$(IPAM_PLATFORM) plan -out=tfplan
+
+.PHONY: ipam-platform-apply
+ipam-platform-apply: ## Azure IPAM part 2: apply the saved plan (and only that plan)
+	$(TF) -chdir=$(IPAM_PLATFORM) apply tfplan
 
 .PHONY: ipam-test
-ipam-test: ## Test the Azure IPAM wrapper against stubs (no Azure, no network)
-	bash scripts/test-azure-ipam.sh
+ipam-test: ## Azure IPAM: validate + terraform test both roots (mocked providers; no Azure, no zip)
+	@# `|| exit 1` on each step: without set -e (Make 3.81), a loop reports only its last command.
+	@for d in $(IPAM_ENTRA) $(IPAM_PLATFORM); do \
+	  echo "== $$d"; \
+	  $(TF) -chdir=$$d init -backend=false -input=false >/dev/null || exit 1; \
+	  $(TF) -chdir=$$d validate || exit 1; \
+	  $(TF) -chdir=$$d test || exit 1; \
+	done
+
+.PHONY: ipam-lock
+ipam-lock: ## Azure IPAM: regenerate both roots' .terraform.lock.hcl (linux_amd64 + darwin_arm64)
+	@for d in $(IPAM_ENTRA) $(IPAM_PLATFORM); do \
+	  $(TF) -chdir=$$d providers lock -platform=linux_amd64 -platform=darwin_arm64 || exit 1; \
+	done

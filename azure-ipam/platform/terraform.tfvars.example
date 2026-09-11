@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars (gitignored) and adjust. Part 2: run by us, against the
+# paid subscription that hosts Azure IPAM (azure-ipam/README.md).
+
+# ⚠ COST. About $170-250/month, all the time. Credit and trial subscriptions are
+# refused unless allow_credit_subscription = true.
+ipam_enabled = false
+
+# From part 1's outputs (`terraform -chdir=azure-ipam/entra output`). Not secret.
+engine_client_id      = "<engine_client_id>"
+engine_application_id = "/applications/<object id>"
+ui_client_id          = "<ui_client_id>"              # omit both ui_* for an API-only install
+ui_application_id     = "/applications/<object id>"
+
+# name_prefix = "scipam"
+# location    = "eastasia" # southeastasia is cheaper for P1v3
