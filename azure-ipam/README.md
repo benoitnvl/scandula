@@ -70,12 +70,22 @@ Python 3.11, `bash ./init.sh 8000`, `/api/status`, Cosmos DB `ipam-db`/`ipam-ctr
 The workflow runs by hand, from `main` only: **Actions → azure-ipam deploy → Run workflow**.
 
 1. **Plan.** Pick the part and leave `reviewed_digest` empty. The job summary shows the plan
-   and its **digest**, a SHA-256 of everything the plan would change.
+   and its **digest**, a SHA-256 of everything the plan would change. The digest is also a
+   notice annotation, so `gh run view` shows it in a terminal.
 2. **Review** the plan.
 3. **Apply.** Run it again with the same part, the same `destroy` setting, and
    `reviewed_digest` set to that digest. It plans again and **applies only if the new plan has
    the same digest**. If anything changed in between (code on `main`, the state, or Azure),
    the digest changes and nothing is applied: plan and review again.
+
+From a terminal, for part 1 (`part=platform` for part 2):
+
+```sh
+gh workflow run azure-ipam-deploy.yaml -R benoitnvl/scandula --ref main -f part=entra
+gh run list -R benoitnvl/scandula --workflow azure-ipam-deploy.yaml --limit 1   # the run's id
+gh run view <run id> -R benoitnvl/scandula         # the digest is a notice; --web shows the full plan
+gh workflow run azure-ipam-deploy.yaml -R benoitnvl/scandula --ref main -f part=entra -f reviewed_digest=<digest>
+```
 
 GitHub environments and their required reviewers aren't available to private repos on GitHub
 Free, so the digest is the approval step. Anyone who can run workflows (write access) can apply,
