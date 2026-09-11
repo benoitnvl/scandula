@@ -63,7 +63,8 @@ case $cmd in
   *'Microsoft.Graph.Authentication'*)  echo "${STUB_GRAPH_VERSION:-2.10.0}" ;;
   *'Get-AzContext; if'*)               echo "00000000-0000-0000-0000-000000000000 11111111-1111-1111-1111-111111111111" ;;
   *'QuotaId'*)                         echo "${STUB_QUOTA:-EnterpriseAgreement_2014-09-01}" ;;
-  *'./deploy.ps1 -AppsOnly'*)          printf '{"engineSecret":"STUB-SECRET-VALUE"}\n' > main.parameters.json ;;
+  *'./deploy.ps1 -AppsOnly'*)          printf '{"engineSecret":"STUB-SECRET-VALUE"}\n' > main.parameters.json
+                                       echo "created $(ls -l main.parameters.json | cut -c1-10)" >> "$STUB_LOG" ;;
   *'./deploy.ps1'*)                    echo "deployed" ;;
   *'./update.ps1'*)                    echo "updated" ;;
 esac
@@ -151,6 +152,7 @@ ok "refuses bicep older than 0.21.1"    failed
 
 # --- apps (part 1) ----------------------------------------------------------------
 echo "apps (part 1)"
+umask 022   # a common default, so the wrapper has to tighten it itself
 fresh; run -- apps
 ok "exits 0"                                 exited 0
 ok "runs deploy.ps1 -AppsOnly with the app names" \
@@ -161,6 +163,7 @@ ok "  without -MgmtGroupId by default (tenant root)" lacks "$LOG" "-MgmtGroupId"
 ok "moves main.parameters.json into the work dir"    [ -f "$WORK/main.parameters.json" ]
 ok "  out of the upstream checkout"                  [ ! -e "$WORK/ipam-v3.6.0/deploy/main.parameters.json" ]
 ok "  with mode 600"                                 eval "ls -l '$WORK/main.parameters.json' | grep -q '^-rw-------'"
+ok "  created 600 by deploy.ps1 (umask), not only chmod'ed after" has "$LOG" "created -rw-------"
 ok "never prints the secret"                         lacks "$OUT" "STUB-SECRET-VALUE"
 
 run -- apps

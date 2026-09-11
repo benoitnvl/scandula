@@ -129,10 +129,11 @@ apps() {
   [ "$IPAM_DISABLE_UI" = false ] || cmd="$cmd -DisableUI"
 
   info "part 1: creating the app registrations"
-  # deploy.ps1 writes main.parameters.json into the current directory.
-  (cd "$dir/deploy" && pwsh -NoLogo -NoProfile -Command "$cmd")
+  # deploy.ps1 writes main.parameters.json into the current directory. It runs under
+  # umask 077 so the secret is created 600; mv keeps that mode, and the chmod is a backstop.
+  (cd "$dir/deploy" && umask 077 && pwsh -NoLogo -NoProfile -Command "$cmd")
   [ -f "$dir/deploy/main.parameters.json" ] || die "deploy.ps1 finished but wrote no main.parameters.json"
-  (umask 077 && mv "$dir/deploy/main.parameters.json" "$out")
+  mv "$dir/deploy/main.parameters.json" "$out"
   chmod 600 "$out"
   info "wrote $out (mode 600). It contains the engine's client secret: hand it to whoever runs part 2 over a secure channel. Never commit it or paste it anywhere."
 }
