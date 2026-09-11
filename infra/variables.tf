@@ -247,8 +247,9 @@ variable "avnm_allocation_policy" {
     from this repo's AVNM IPAM region pools (layer B in docs/azure-ipam-plan.md). OFF
     until management_group_id is set.
 
-      management_group_id  full id of the management group the definition lives in. It
-                           must contain every assignment scope below.
+      management_group_id  full id of the management group the definition lives in. Every
+                           assignment scope below must be it or under it: checked at plan
+                           against the real hierarchy (policy-avnm.tf).
       assignments          one entry per migrated scope, added as each one migrates.
                            Key: 1-19 lowercase letters, digits or hyphens (the
                            assignment is named avnm-<key>).

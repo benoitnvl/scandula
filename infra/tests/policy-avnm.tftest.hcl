@@ -17,6 +17,14 @@ mock_provider "azurerm" {
       subscription_id = "00000000-0000-0000-0000-000000000000"
     }
   }
+  # What sits under mg-landing-zones: mg-corp, and one subscription.
+  mock_data "azurerm_management_group" {
+    defaults = {
+      id                       = "/providers/Microsoft.Management/managementGroups/mg-landing-zones"
+      all_management_group_ids = ["/providers/Microsoft.Management/managementGroups/mg-corp"]
+      all_subscription_ids     = ["22222222-2222-2222-2222-222222222222"]
+    }
+  }
 
   mock_resource "azurerm_resource_group" {
     defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock" }
@@ -232,6 +240,78 @@ run "avnm_policy_names_fit" {
     condition     = length(azurerm_policy_definition.avnm_allocation[0].name) <= 64
     error_message = "A policy definition name must be 64 characters or fewer, even with a 15-character name_prefix."
   }
+}
+
+# --- where it may be assigned ------------------------------------------------------------
+
+run "avnm_assignment_at_the_definitions_own_mg_is_allowed" {
+  command = plan
+
+  variables {
+    avnm_allocation_policy = {
+      management_group_id = "/providers/Microsoft.Management/managementGroups/mg-landing-zones"
+      assignments         = { lz = { scope = "/providers/Microsoft.Management/managementGroups/mg-landing-zones" } }
+    }
+  }
+
+  assert {
+    condition     = length(azurerm_management_group_policy_assignment.avnm_allocation) == 1
+    error_message = "The definition's own management group must be an allowed scope."
+  }
+}
+
+# The provider's lists may hold bare names rather than full ids: both must work.
+run "avnm_hierarchy_check_accepts_bare_names" {
+  command = plan
+
+  override_data {
+    target = data.azurerm_management_group.avnm_policy
+    values = {
+      all_management_group_ids = ["MG-Corp"]
+      all_subscription_ids     = ["/subscriptions/22222222-2222-2222-2222-222222222222"]
+    }
+  }
+
+  variables {
+    avnm_allocation_policy = {
+      management_group_id = "/providers/Microsoft.Management/managementGroups/mg-landing-zones"
+      assignments = {
+        corp = { scope = "/providers/Microsoft.Management/managementGroups/mg-corp" }
+        app1 = { scope = "/subscriptions/22222222-2222-2222-2222-222222222222" }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(azurerm_management_group_policy_assignment.avnm_allocation) == 1 && length(azurerm_subscription_policy_assignment.avnm_allocation) == 1
+    error_message = "Scopes under the management group must pass however the provider formats its lists."
+  }
+}
+
+run "refuses_an_avnm_mg_outside_the_hierarchy" {
+  command = plan
+
+  variables {
+    avnm_allocation_policy = {
+      management_group_id = "/providers/Microsoft.Management/managementGroups/mg-landing-zones"
+      assignments         = { other = { scope = "/providers/Microsoft.Management/managementGroups/mg-somewhere-else" } }
+    }
+  }
+
+  expect_failures = [azurerm_management_group_policy_assignment.avnm_allocation]
+}
+
+run "refuses_an_avnm_subscription_outside_the_hierarchy" {
+  command = plan
+
+  variables {
+    avnm_allocation_policy = {
+      management_group_id = "/providers/Microsoft.Management/managementGroups/mg-landing-zones"
+      assignments         = { other = { scope = "/subscriptions/33333333-3333-3333-3333-333333333333" } }
+    }
+  }
+
+  expect_failures = [azurerm_subscription_policy_assignment.avnm_allocation]
 }
 
 # --- rejections ---------------------------------------------------------------------------

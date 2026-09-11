@@ -133,6 +133,9 @@ avnm_allocation_policy = {
 }
 ```
 
+Terraform checks at plan that each scope is the definition's management group or sits under it,
+against the real hierarchy. Azure can't assign a definition anywhere else.
+
 A VNet is non-compliant if it holds no allocation from scandula's region pools, or holds one
 from any other pool.
 

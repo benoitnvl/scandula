@@ -36,6 +36,31 @@ locals {
   avnm_non_compliance_message = "This VNet must take its address space from AVNM IPAM (an allocation from one of scandula's region pools), not from static address prefixes."
 }
 
+# --- where it may be assigned ------------------------------------------------------------
+
+# A definition can only be assigned at its own management group or below it. Checked
+# at plan against the real hierarchy, rather than failing halfway through an apply.
+# Needs read access to that management group (Resource Policy Contributor has it).
+data "azurerm_management_group" "avnm_policy" {
+  count = var.avnm_allocation_policy.management_group_id != null && length(var.avnm_allocation_policy.assignments) > 0 ? 1 : 0
+
+  name = basename(var.avnm_allocation_policy.management_group_id)
+}
+
+locals {
+  # Compared by name (the last path segment, lower-cased), so it works whether the
+  # provider lists full ids or bare names.
+  avnm_allowed_management_groups = toset([
+    for id in concat(compact([var.avnm_allocation_policy.management_group_id]), try(data.azurerm_management_group.avnm_policy[0].all_management_group_ids, [])) :
+    lower(basename(id))
+  ])
+  avnm_allowed_subscriptions = toset([
+    for id in try(data.azurerm_management_group.avnm_policy[0].all_subscription_ids, []) : lower(basename(id))
+  ])
+}
+
+# --- the definition -----------------------------------------------------------------------
+
 resource "azurerm_policy_definition" "avnm_allocation" {
   count = var.avnm_allocation_policy.management_group_id != null ? 1 : 0
 
@@ -89,6 +114,8 @@ resource "azurerm_policy_definition" "avnm_allocation" {
   })
 }
 
+# --- assignments, one per migrated scope ----------------------------------------------
+
 resource "azurerm_management_group_policy_assignment" "avnm_allocation" {
   for_each = local.avnm_mg_assignments
 
@@ -107,6 +134,13 @@ resource "azurerm_management_group_policy_assignment" "avnm_allocation" {
 
   non_compliance_message {
     content = local.avnm_non_compliance_message
+  }
+
+  lifecycle {
+    precondition {
+      condition     = contains(local.avnm_allowed_management_groups, lower(basename(each.value.scope)))
+      error_message = "avnm_allocation_policy assignment \"${each.key}\": ${each.value.scope} isn't avnm_allocation_policy.management_group_id or a management group under it, so the definition can't be assigned there."
+    }
   }
 }
 
@@ -128,5 +162,12 @@ resource "azurerm_subscription_policy_assignment" "avnm_allocation" {
 
   non_compliance_message {
     content = local.avnm_non_compliance_message
+  }
+
+  lifecycle {
+    precondition {
+      condition     = contains(local.avnm_allowed_subscriptions, lower(basename(each.value.scope)))
+      error_message = "avnm_allocation_policy assignment \"${each.key}\": ${each.value.scope} isn't a subscription under avnm_allocation_policy.management_group_id, so the definition can't be assigned there."
+    }
   }
 }
