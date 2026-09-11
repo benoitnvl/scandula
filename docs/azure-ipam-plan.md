@@ -213,13 +213,20 @@ that holds all the landing zones. Microsoft's docs *highly discourage* a non-roo
 root management group**, and **Global Administrator** for admin consent. The deploying account
 has none of the last two. So it's a two-part install:
 
-- **Part 1 (identities):** an Aberdeen tenant administrator applies `azure-ipam/entra`. It makes
-  our deploying identity an owner of both app registrations.
-- **Part 2 (infrastructure):** we apply `azure-ipam/platform`. As an owner, it creates the
-  engine's client secret itself and puts it straight into Key Vault.
+Both parts are applied **only by GitHub Actions** (`.github/workflows/azure-ipam-deploy.yaml`),
+each as its own workload identity over OIDC. An Aberdeen Global Administrator sets those
+identities up once (azure-ipam/README.md):
 
-`deploy.ps1 -AppsOnly` instead writes the secret into `main.parameters.json` for part 2. The
-Terraform split means nothing secret is ever handed over.
+- **Part 1 (identities)** runs as an identity with Graph `Application.ReadWrite.All` and
+  `Directory.ReadWrite.All`, which may assign Reader (and only Reader) at the root management
+  group. ⚠ `Directory.ReadWrite.All`, needed for the tenant-wide consent grants, makes it nearly
+  as powerful as a Global Administrator.
+- **Part 2 (infrastructure)** runs as an identity that owns both app registrations (part 1 makes
+  it an owner). It creates the engine's client secret itself and puts it straight into Key
+  Vault.
+
+An apply needs the digest of a plan someone reviewed. `deploy.ps1 -AppsOnly` instead writes the
+secret into `main.parameters.json` for part 2; here nothing secret is ever handed over.
 
 ### Decision 3: cost and subscription
 

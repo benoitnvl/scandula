@@ -73,7 +73,7 @@ infra/
   backend.hcl.example
   terraform.tfvars.example
 azure-ipam/          Microsoft's Azure IPAM as Terraform (`make ipam-*`; runbook in its README)
-  entra/             part 1: app registrations, consent, Reader (an Aberdeen tenant admin runs it)
+  entra/             part 1: app registrations, consent, Reader (applied by GitHub Actions only)
   platform/          part 2: App Service, Cosmos DB, Key Vault, … (gated: costs money)
 docs/
   bootstrap.md       one-time: state account, RP registration, first apply
@@ -110,7 +110,10 @@ is load-bearing.
 
 CI (GitHub-hosted `ubuntu-latest`: stazzona has no runner scale set for this repo) runs
 `terraform fmt -check`, then `validate` + `test` for `infra/` and both Azure IPAM roots, and a
-trivy misconfig + secret scan, on every PR. **CI never touches Azure.** `make apply` from a workstation is the only write path.
+trivy misconfig + secret scan, on every PR. **`ci.yaml` never touches Azure.** For `infra/`, `make apply` from a workstation
+is the only write path. Azure IPAM is the other way round: it's applied **only** by the manual
+`azure-ipam deploy` workflow, over OIDC, and only with the digest of a reviewed plan
+([azure-ipam/README.md](azure-ipam/README.md#deploying-github-actions-only)).
 
 A separate `claude` workflow has Claude review every non-draft PR and answer `@claude`
 comments. It authenticates with the `CLAUDE_CODE_OAUTH_TOKEN` repo secret, so its usage

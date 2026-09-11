@@ -71,8 +71,9 @@ lock: ## Regenerate .terraform.lock.hcl for CI (linux_amd64) and Macs (darwin_ar
 	$(TF) -chdir=$(TF_DIR) providers lock -platform=linux_amd64 -platform=darwin_arm64
 
 ## --- Azure IPAM (azure-ipam/README.md): two Terraform roots ---
-## azure-ipam/entra is part 1 (Entra ID; an Aberdeen tenant administrator runs it).
-## azure-ipam/platform is part 2 (the Azure resources; off until ipam_enabled = true).
+## azure-ipam/entra is part 1 (Entra ID); azure-ipam/platform is part 2 (the Azure
+## resources; off until ipam_enabled = true). Both are applied ONLY by GitHub Actions
+## (.github/workflows/azure-ipam-deploy.yaml): these targets fetch, test, lock and plan.
 
 IPAM_ENTRA    := azure-ipam/entra
 IPAM_PLATFORM := azure-ipam/platform
@@ -97,12 +98,8 @@ ipam-entra-init: ## Azure IPAM part 1: terraform init against azure-ipam/entra/b
 	$(TF) -chdir=$(IPAM_ENTRA) init -backend-config=backend.hcl
 
 .PHONY: ipam-entra-plan
-ipam-entra-plan: ## Azure IPAM part 1 (tenant admin): plan the Entra ID objects -> tfplan
-	$(TF) -chdir=$(IPAM_ENTRA) plan -out=tfplan
-
-.PHONY: ipam-entra-apply
-ipam-entra-apply: ## Azure IPAM part 1: apply the saved plan (and only that plan)
-	$(TF) -chdir=$(IPAM_ENTRA) apply tfplan
+ipam-entra-plan: ## Azure IPAM part 1: plan, read-only (applies run only in GitHub Actions)
+	$(TF) -chdir=$(IPAM_ENTRA) plan -input=false
 
 .PHONY: ipam-platform-init
 ipam-platform-init: ## Azure IPAM part 2: terraform init against azure-ipam/platform/backend.hcl
@@ -110,15 +107,11 @@ ipam-platform-init: ## Azure IPAM part 2: terraform init against azure-ipam/plat
 	$(TF) -chdir=$(IPAM_PLATFORM) init -backend-config=backend.hcl
 
 .PHONY: ipam-platform-plan
-ipam-platform-plan: ## Azure IPAM part 2: plan -> tfplan (with ipam_enabled, run ipam-fetch first)
-	$(TF) -chdir=$(IPAM_PLATFORM) plan -out=tfplan
-
-.PHONY: ipam-platform-apply
-ipam-platform-apply: ## Azure IPAM part 2: apply the saved plan (and only that plan)
-	$(TF) -chdir=$(IPAM_PLATFORM) apply tfplan
+ipam-platform-plan: ## Azure IPAM part 2: plan, read-only (with ipam_enabled, run ipam-fetch first)
+	$(TF) -chdir=$(IPAM_PLATFORM) plan -input=false
 
 .PHONY: ipam-test
-ipam-test: ## Azure IPAM: validate + terraform test both roots (mocked providers; no Azure, no zip)
+ipam-test: ## Azure IPAM: validate + test both roots, and the workflow's glue script (no Azure, no zip)
 	@# `|| exit 1` on each step: without set -e (Make 3.81), a loop reports only its last command.
 	@for d in $(IPAM_ENTRA) $(IPAM_PLATFORM); do \
 	  echo "== $$d"; \
@@ -126,6 +119,8 @@ ipam-test: ## Azure IPAM: validate + terraform test both roots (mocked providers
 	  $(TF) -chdir=$$d validate || exit 1; \
 	  $(TF) -chdir=$$d test || exit 1; \
 	done
+	@echo "== azure-ipam/ci.sh"
+	bash scripts/test-azure-ipam-ci.sh
 
 .PHONY: ipam-lock
 ipam-lock: ## Azure IPAM: regenerate both roots' .terraform.lock.hcl (linux_amd64 + darwin_arm64)

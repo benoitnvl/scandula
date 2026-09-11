@@ -1,0 +1,154 @@
+name: azure-ipam deploy
+
+# Azure IPAM (azure-ipam/) is planned and applied ONLY by this workflow, never from a
+# workstation. Run it by hand, from main: Actions -> azure-ipam deploy -> Run workflow.
+#
+#   1. Plan: leave reviewed_digest empty. The job summary shows the plan and its digest.
+#   2. Apply: run it again, with the same part and destroy setting, and reviewed_digest
+#      set to that digest. It plans again and applies only if the new plan has the same
+#      digest, so what gets applied is exactly what was reviewed. If anything changed in
+#      between (code, state or Azure), the digest changes and nothing is applied.
+#   destroy: the same two steps with a destroy plan. Part 2 before part 1.
+#
+# The digest is the approval step. GitHub environments (and their required reviewers)
+# aren't available to private repos on GitHub Free.
+#
+# Auth is OIDC: GitHub's short-lived token is exchanged for an Entra ID token, and
+# nothing secret is stored. Azure trusts only tokens from THIS workflow file run from
+# main: the repository's OIDC subject includes job_workflow_ref, and the federated
+# credentials pin it. Trusting the branch alone wouldn't do, because claude.yaml also
+# requests tokens from main (its @claude responder). The client, tenant and subscription
+# ids are repository variables: they're identifiers, not credentials. Setup:
+# azure-ipam/README.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      part:
+        description: "entra (part 1: Entra ID) or platform (part 2: the Azure resources)"
+        type: choice
+        options: [entra, platform]
+        required: true
+      destroy:
+        description: "Plan a destroy instead (part 2 before part 1)"
+        type: boolean
+        default: false
+      reviewed_digest:
+        description: "Empty: plan only. To apply: the digest from the plan run you reviewed"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+# One run per part at a time; never cancel one halfway through an apply.
+concurrency:
+  group: azure-ipam-${{ inputs.part }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  deploy:
+    name: ${{ inputs.reviewed_digest == '' && 'plan' || 'apply' }} ${{ inputs.part }}${{ inputs.destroy && ' (destroy)' || '' }}
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PART: ${{ inputs.part }}
+      ROOT: azure-ipam/${{ inputs.part }}
+      DESTROY: ${{ inputs.destroy }}
+      REVIEWED_DIGEST: ${{ inputs.reviewed_digest }}
+      TF_IN_AUTOMATION: "1"
+      TF_INPUT: "0"
+      ARM_USE_OIDC: "true"
+      ARM_USE_CLI: "false"
+      # ENTRA or PLATFORM is a literal, never empty, so a missing variable can't fall
+      # through to the other part's identity: it stays empty and "Check the settings" stops.
+      ARM_CLIENT_ID: ${{ vars[format('AZURE_CLIENT_ID_{0}', inputs.part == 'entra' && 'ENTRA' || 'PLATFORM')] }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TFSTATE_SUBSCRIPTION_ID: ${{ vars.TFSTATE_SUBSCRIPTION_ID }}
+      TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+      TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+      TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.2 # keep in step with ci.yaml's TF_VERSION
+          terraform_wrapper: false
+
+      - name: Check the settings
+        run: |
+          missing=""
+          for v in ARM_CLIENT_ID ARM_TENANT_ID ARM_SUBSCRIPTION_ID TFSTATE_RESOURCE_GROUP TFSTATE_STORAGE_ACCOUNT TFSTATE_CONTAINER; do
+            if [ -z "${!v}" ]; then missing="$missing $v"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Not set:$missing. They come from repository variables (azure-ipam/README.md)."
+            exit 1
+          fi
+          if [ -n "$REVIEWED_DIGEST" ] && ! [[ $REVIEWED_DIGEST =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::reviewed_digest must be the 64-character digest a plan run printed."
+            exit 1
+          fi
+
+      - name: Terraform inputs from repository variables
+        env:
+          IPAM_PLATFORM_OWNER_OBJECT_IDS: ${{ vars.IPAM_PLATFORM_OWNER_OBJECT_IDS }}
+          IPAM_UI_ENABLED: ${{ vars.IPAM_UI_ENABLED }}
+          IPAM_READER_MANAGEMENT_GROUP_ID: ${{ vars.IPAM_READER_MANAGEMENT_GROUP_ID }}
+          IPAM_ENGINE_APP_NAME: ${{ vars.IPAM_ENGINE_APP_NAME }}
+          IPAM_UI_APP_NAME: ${{ vars.IPAM_UI_APP_NAME }}
+          IPAM_ENABLED: ${{ vars.IPAM_ENABLED }}
+          IPAM_NAME_PREFIX: ${{ vars.IPAM_NAME_PREFIX }}
+          IPAM_LOCATION: ${{ vars.IPAM_LOCATION }}
+        run: azure-ipam/ci.sh tfvars "$PART" >> "$GITHUB_ENV"
+
+      - name: Part 1's outputs, for part 2
+        if: inputs.part == 'platform'
+        run: azure-ipam/ci.sh entra-outputs >> "$GITHUB_ENV"
+
+      - name: The pinned release zip
+        if: inputs.part == 'platform'
+        run: make ipam-fetch
+
+      - name: terraform init
+        run: azure-ipam/ci.sh init "$PART"
+
+      - name: terraform plan
+        run: |
+          mode=()
+          if [ "$DESTROY" = true ]; then mode=(-destroy); fi
+          terraform -chdir="$ROOT" plan -input=false -no-color -lock-timeout=5m "${mode[@]}" -out=tfplan | tee plan.txt
+          digest=$(azure-ipam/ci.sh digest "$PART" tfplan)
+          echo "DIGEST=$digest" >> "$GITHUB_ENV"
+          kind=plan
+          if [ "$DESTROY" = true ]; then kind="destroy plan"; fi
+          {
+            echo "## Azure IPAM $PART: $kind"
+            echo
+            echo "Digest: \`$digest\`"
+            echo
+            echo "To apply exactly this plan, run the workflow again with the same part and destroy setting, and reviewed_digest set to this digest."
+            echo
+            echo '```'
+            tail -c 900000 plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: terraform apply (only the reviewed plan)
+        if: inputs.reviewed_digest != ''
+        run: |
+          if [ "$DIGEST" != "$REVIEWED_DIGEST" ]; then
+            echo "::error::This plan (digest $DIGEST) isn't the one reviewed ($REVIEWED_DIGEST): something changed since. Run a plan again and review it."
+            exit 1
+          fi
+          terraform -chdir="$ROOT" apply -input=false -no-color -lock-timeout=5m tfplan

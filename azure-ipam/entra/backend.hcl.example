@@ -1,11 +1,14 @@
-# Copy to backend.hcl (gitignored) and fill in, then `make ipam-entra-init`.
+# For a local, read-only look only (`make ipam-entra-init`, `make ipam-entra-plan`).
+# Part 1 is applied only by GitHub Actions (azure-ipam/README.md), which passes these
+# same settings itself.
 #
-# The same state account as infra/, under its own key. Whoever runs part 1 needs
-# Storage Blob Data Contributor on the container. This state holds no secret: part 1
-# creates no client secret (part 2 does).
+# The same state account as infra/, in a container of its own: only the two CI
+# identities can write it (Storage Blob Data Contributor), and that is what keeps the
+# applies in GitHub. A person needs Storage Blob Data Reader to plan locally. This
+# state holds no secret.
 resource_group_name  = "rg-scandula-tfstate"
 storage_account_name = "stscandulatfstate"
-container_name       = "tfstate"
+container_name       = "tfstate-azure-ipam"
 key                  = "azure-ipam-entra.tfstate"
 
 use_azuread_auth = true

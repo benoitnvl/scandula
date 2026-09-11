@@ -65,6 +65,16 @@ jobs:
         working-directory: ${{ matrix.root }}
         run: terraform test
 
+  azure-ipam-ci-glue:
+    name: azure-ipam deploy glue
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: shellcheck azure-ipam/ci.sh scripts/test-azure-ipam-ci.sh
+      - name: tests (stub terraform; no Azure, no GitHub token)
+        run: bash scripts/test-azure-ipam-ci.sh
+
   trivy:
     name: trivy
     runs-on: ubuntu-latest

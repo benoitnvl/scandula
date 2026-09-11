@@ -1,5 +1,6 @@
-# Copy to terraform.tfvars (gitignored) and adjust. Part 2: run by us, against the
-# paid subscription that hosts Azure IPAM (azure-ipam/README.md).
+# Copy to terraform.tfvars (gitignored) for a local, read-only plan. GitHub Actions
+# doesn't read this file: it sets the same inputs from repository variables
+# (azure-ipam/README.md).
 
 # ⚠ COST. About $170-250/month, all the time. Credit and trial subscriptions are
 # refused unless allow_credit_subscription = true.
