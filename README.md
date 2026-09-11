@@ -57,6 +57,8 @@ infra/
 docs/
   bootstrap.md       one-time: state account, RP registration, first apply
   design.md          topology, address plan, cost, what's deliberately not here yet
+  azure-ipam-plan.md plan (not built) for a second deployment: Microsoft's Azure IPAM
+  diagrams/          architecture.drawio + the exported architecture.svg (`make diagram`)
 scripts/
   validation-mutants.py   `make mutants`: proves every validation is actually tested
 ```
