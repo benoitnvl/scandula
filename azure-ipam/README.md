@@ -1,109 +1,143 @@
-# Azure IPAM runbook
+# Azure IPAM, as Terraform
 
-How scandula deploys Microsoft's [Azure IPAM](https://github.com/Azure/ipam): the address
-authority described in [`docs/azure-ipam-plan.md`](../docs/azure-ipam-plan.md). The work is
-done by `ipam.sh`, driven by these `make` targets:
+Microsoft's [Azure IPAM](https://github.com/Azure/ipam) (`Azure/ipam`), deployed by two
+Terraform roots instead of its PowerShell installer (`deploy.ps1` + Bicep). They reproduce what
+`deploy.ps1` creates at release **v3.6.0**, with the differences listed below. Why Azure IPAM,
+and how it fits with AVNM: [docs/azure-ipam-plan.md](../docs/azure-ipam-plan.md).
 
-| Target | What it does | Who runs it |
-|--------|--------------|-------------|
-| `make ipam-fetch` | Clones the pinned upstream release, verifies its commit, and downloads and verifies the release zip | anyone |
-| `make ipam-check` | Checks PowerShell, the Az and Microsoft Graph modules, Bicep, and the Azure PowerShell context | anyone |
-| `make ipam-apps` | **Part 1**: creates the Entra ID app registrations, and writes `.work/main.parameters.json` | an Aberdeen tenant admin |
-| `make ipam-infra` | **Part 2**: deploys the infrastructure. **Costs money**, so it's guarded | us |
-| `make ipam-update` | Zip-deploys the pinned release to an existing install | us |
-| `make ipam-test` | Tests `ipam.sh` against stubs: no Azure, no network | anyone, and CI |
+| Root | Part | Run by | Creates |
+|------|------|--------|---------|
+| [`entra/`](entra/) | 1 | an Aberdeen tenant administrator | the engine and UI app registrations, their service principals, tenant-wide consent, the engine's Reader role |
+| [`platform/`](platform/) | 2 | us | App Service, Cosmos DB, Key Vault, Log Analytics, a managed identity; the engine's client secret; the UI's redirect URI. **Costs money; off by default** |
 
-Nothing here is Terraform. Azure IPAM's resources live outside `infra/` and its state, and
-ARM owns them.
+Part 1 makes part 2's identities **owners of both app registrations**. That's what lets part 2
+create the engine's client secret itself and put it straight into Key Vault. Unlike
+`deploy.ps1 -AppsOnly`, **no secret is ever handed over**, and part 1's state holds none.
 
-## The pin, and why "native"
+| Target | Does | Who |
+|--------|------|-----|
+| `make ipam-fetch` | Downloads the pinned `ipam.zip` to `platform/.work/` and checks its SHA-256 | us |
+| `make ipam-entra-init` / `-plan` / `-apply` | Part 1 | tenant admin |
+| `make ipam-platform-init` / `-plan` / `-apply` | Part 2 | us |
+| `make ipam-test` | `validate` + `terraform test` for both roots, against mocked providers: no Azure, no zip | anyone, and CI |
+| `make ipam-lock` | Regenerates both roots' `.terraform.lock.hcl` | whoever bumps a provider |
 
-`settings.sh` pins all three of these, and `ipam-fetch` checks all three on every run:
+## The pin
 
-| | Value |
-|--|--|
-| Release | `v3.6.0` |
-| Commit | `12e41f4b93a7e5f3c61a859428c32137440037b2` (the tag is lightweight) |
-| `ipam.zip` SHA-256 | `0ac8d7cb95eb7b3b13622470aff42a26bda8a3233689938ac16b042ab31c4abe` (GitHub's digest for the release asset) |
+[`platform/release.json`](platform/release.json) pins the release, its commit, the SHA-256 of its
+`ipam.zip`, and the Python version the engine targets (`engine/app/version.json`). Terraform reads
+it, and **refuses to plan a zip whose SHA-256 differs**, so a changed or missing asset stops the
+deploy.
 
-The wrapper always installs **native**: `deploy.ps1 -Native -ZipFilePath <the verified zip>`.
-Two upstream defaults would silently ignore the pin:
+The app runs the zip **as it is**, with `WEBSITE_RUN_FROM_PACKAGE=1`. The zip's `packages/`
+directory is built from upstream's lock file, so the zip's SHA-256 pins the dependencies too. The
+other two ways upstream installs don't:
 
-- The default **container** install runs `azureipam.azurecr.io/ipam:latest`.
-- `update.ps1` without `-ZipFilePath` downloads **`releases/latest`**.
+- `deploy.ps1 -Native` sets `SCM_DO_BUILD_DURING_DEPLOYMENT`, so App Service rebuilds with Oryx
+  from the engine's **unpinned** `requirements.txt`.
+- The default container install runs `azureipam.azurecr.io/ipam:latest`.
 
-## Prerequisites
+Run-from-package isn't new: `init.sh` and upstream's Bicep already use it for one cloud
+(`AZURE_US_GOV_SECRET`).
 
-- **PowerShell 7.2+** (`pwsh`), **Azure PowerShell (Az) 8.0+** (11.4+ recommended), `git`, `curl`.
-- **Part 1** also needs **Microsoft Graph PowerShell 2.0+**. The person running it needs
-  **Global Administrator**, plus Owner or User Access Administrator at the management group
-  the engine will read. By default that's the tenant root.
-- **Part 2** also needs the **Bicep CLI 0.21.1+**, and **Owner** (or Contributor + User Access
-  Administrator) on the target subscription.
-- Signed in to Azure PowerShell, on the right subscription:
+## Differences from `deploy.ps1`
 
-  ```powershell
-  Connect-AzAccount
-  Set-AzContext -Subscription <target subscription id>
+| Upstream | Here | Why |
+|----------|------|-----|
+| Part 1 writes the engine secret into `main.parameters.json` for part 2 | Part 2 creates the secret, as an owner of the engine app | nothing secret changes hands |
+| A placeholder SPA redirect URI, replaced after the deploy | Part 2 sets the real one; part 1 sets none | the placeholder does nothing |
+| Oryx build from `requirements.txt` | run-from-package | pinned dependencies (above) |
+| New resource names (and a new resource group) on every run | Stable names with one random suffix, kept in state | Terraform manages one install |
+| Tenant id, client ids and identity id also stored in Key Vault | Plain app settings; only the secret is in Key Vault | they aren't secret |
+| Cosmos DB key auth left on | Off | the engine uses the managed identity when `COSMOS_KEY` is unset, and nothing sets it |
+| FTPS and TLS left at Azure's defaults | FTPS off, TLS 1.2 | hardening |
+| Diagnostics: hand-picked log categories | `allLogs` category group | a superset that doesn't break on renames |
+| The engine scope id is new on every run | One random id, kept in state | stable |
+| Secret: 2 years, rotated by hand | 2 years, replaced by the first apply after one year | rotation without a calendar reminder |
+
+Everything else mirrors v3.6.0: the same Graph and ARM permission ids, the three tenant-wide
+consent grants, `api://<engine client id>`, v2 tokens, Reader at the tenant root, P1v3 Linux,
+Python 3.11, `bash ./init.sh 8000`, `/api/status`, Cosmos DB `ipam-db`/`ipam-ctr` partitioned on
+`/tenant_id` at up to 1000 RU/s, and the managed identity's roles.
+
+## Part 1: Entra ID (an Aberdeen tenant administrator)
+
+Needs, all as the person running it:
+
+- **Global Administrator**, for the tenant-wide (AllPrincipals) consent grants.
+- A role that can **assign roles at the management group** the engine reads, by default the
+  tenant root: Owner, User Access Administrator, or a custom role with
+  `Microsoft.Authorization/roleAssignments/write`.
+- Terraform ≥ 1.9, the Azure CLI, and `az login`. `ARM_SUBSCRIPTION_ID` can be any subscription
+  they can see: azurerm needs one, though the only Azure resource here is a management-group role
+  assignment.
+- Access to the state: Storage Blob Data Contributor on the `tfstate` container (see
+  `entra/backend.hcl.example`), or a backend of their own.
+
+```sh
+cp azure-ipam/entra/backend.hcl.example     azure-ipam/entra/backend.hcl
+cp azure-ipam/entra/terraform.tfvars.example azure-ipam/entra/terraform.tfvars
+# set platform_owner_object_ids: the object id(s) of whoever runs part 2
+make ipam-entra-init
+make ipam-entra-plan
+make ipam-entra-apply
+terraform -chdir=azure-ipam/entra output
+```
+
+Hand the outputs to whoever runs part 2. **None of them is secret.**
+
+Options, in `terraform.tfvars`:
+
+- `ui_enabled = false` gives an API-only install: no UI app, and no tenant-wide consent to Graph
+  `Directory.Read.All`, which only the UI needs.
+- `reader_management_group_id` narrows the engine's Reader role. Microsoft's docs discourage
+  anything narrower than the tenant root: the engine can only see VNets under it.
+
+## Part 2: the platform (us)
+
+⚠ **About $170–250 a month, running all the time** (P1v3 is about $134–158/month; Cosmos DB
+autoscale about $9–88/month). Two guards:
+
+- `ipam_enabled` is **false** by default, and the tests assert that nothing is planned while it
+  is.
+- Terraform **refuses a credit or trial subscription**, or any with a spending limit on, unless
+  `allow_credit_subscription = true`. On the Visual Studio subscription, Azure IPAM would use up
+  the credit in about a week, and Azure would then disable the subscription, tfstate account
+  included.
+
+Needs:
+
+- A **paid subscription**, with **Owner** (part 2 creates role assignments), as
+  `ARM_SUBSCRIPTION_ID`.
+- To be signed in as an identity listed in part 1's `platform_owner_object_ids`.
+- These resource providers, registered once:
+
+  ```sh
+  for rp in Microsoft.Web Microsoft.DocumentDB Microsoft.KeyVault Microsoft.ManagedIdentity \
+            Microsoft.OperationalInsights Microsoft.Insights; do
+    az provider register --namespace "$rp"
+  done
   ```
 
-`make ipam-check` confirms all of this, and prints the subscription and tenant it would use.
-
-## Settings
-
-`settings.sh` holds the committed, non-secret defaults. An environment variable of the same
-name overrides each one:
-
-| Setting | Default | Notes |
-|---------|---------|-------|
-| `IPAM_LOCATION` | `eastasia` | The same region as the control plane |
-| `IPAM_NAME_PREFIX` | `scipam` | 1–7 lowercase letters/digits (`deploy.ps1`'s limit) |
-| `IPAM_UI_APP_NAME` / `IPAM_ENGINE_APP_NAME` | `scandula-ipam-ui` / `scandula-ipam-engine` | App registration names |
-| `IPAM_MGMT_GROUP` | *(empty = tenant root)* | Must cover every landing-zone subscription; see the plan's decision 1 |
-| `IPAM_DISABLE_UI` | `false` | `true` = API only, so no Graph `Directory.Read.All` consent |
-
-Every value is checked against a strict pattern before it goes anywhere near PowerShell.
-
-## Part 1: identities (an Aberdeen tenant admin)
-
 ```sh
-make ipam-check
-make ipam-apps          # IPAM_MGMT_GROUP=<mg> / IPAM_DISABLE_UI=true to override
+cp azure-ipam/platform/backend.hcl.example     azure-ipam/platform/backend.hcl
+cp azure-ipam/platform/terraform.tfvars.example azure-ipam/platform/terraform.tfvars
+# fill in part 1's outputs; set ipam_enabled = true
+make ipam-fetch
+make ipam-platform-init
+make ipam-platform-plan
+make ipam-platform-apply
+terraform -chdir=azure-ipam/platform output ipam_url
 ```
 
-1. `deploy.ps1 -AppsOnly` creates the UI and engine app registrations, grants the engine
-   **Reader** at the management group, and asks for **admin consent**.
-2. `main.parameters.json` lands in `azure-ipam/.work/`, with mode `600`. **It contains the
-   engine's client secret.** Git ignores it and the wrapper never prints it.
-3. Hand it to whoever runs part 2 over a secure channel, such as a Key Vault secret or an
-   encrypted share. Never email it, paste it into chat, or commit it.
+The first apply waits two minutes after granting itself Key Vault Secrets Officer, because Key
+Vault role assignments take a while to arrive. If writing `ENGINE-SECRET` still fails with a 403,
+run the plan and apply again.
 
-The wrapper refuses to run part 1 again while that file exists, rather than overwrite a secret
-that may already have been handed over.
+⚠ **Part 2's state holds the engine's client secret** (the password, and the Key Vault secret).
+Only the people who run part 2 should be able to read `azure-ipam-platform.tfstate`.
 
-## Part 2: infrastructure (us)
-
-Put the parameter file at `azure-ipam/.work/main.parameters.json`, or point
-`IPAM_PARAMETER_FILE` at it. Then:
-
-```sh
-make ipam-check
-IPAM_CONFIRM_COST=yes make ipam-infra
-```
-
-This deploys a P1v3 App Service (native, from the verified zip), Cosmos DB, Key Vault, Log
-Analytics and a managed identity: **about $170–250/month**. Guards:
-
-- It **won't run without `IPAM_CONFIRM_COST=yes`**.
-- It **refuses credit and trial subscriptions**, such as Visual Studio `MSDN_*`: with a spending
-  limit, the credit runs out within days and the whole subscription is disabled, tfstate
-  included. `IPAM_ALLOW_CREDIT_SUBSCRIPTION=yes` overrides that, deliberately.
-- It **needs the parameter file** from part 1.
-
-Afterwards, open the App Service's URL and sign in. Check the engine discovers the
-landing-zone VNets.
-
-## Configure (the plan's model)
+## Configure it
 
 Configure the address model in the Azure IPAM UI, or through its API, as in the plan:
 
@@ -120,43 +154,59 @@ Blocking the on-premises ranges needs Azure Policy (the plan's layer A): that's
 
 ## Upgrading
 
-1. Pick the new release, and update all three pins in `settings.sh` in a PR:
+1. Update **everything in `release.json` together**, in a PR:
 
    ```sh
-   gh api repos/Azure/ipam/git/ref/tags/<tag> --jq .object.sha             # IPAM_COMMIT (lightweight tag)
-   gh api repos/Azure/ipam/releases/tags/<tag> --jq '.assets[].digest'     # IPAM_ZIP_SHA256
+   v=v3.7.0   # the new release
+   gh api "repos/Azure/ipam/git/ref/tags/$v" --jq .object.sha        # commit (a lightweight tag)
+   gh api "repos/Azure/ipam/releases/tags/$v" \
+     --jq '.assets[] | select(.name == "ipam.zip") | .digest'         # sha256:<zip_sha256>
+   gh api "repos/Azure/ipam/contents/engine/app/version.json?ref=$v" \
+     -H 'Accept: application/vnd.github.raw'                          # python_version
    ```
 
-   Read the release notes for migration steps first. Some upgrades change the Bicep and need
-   part 2 re-run, not just a zip deploy.
-2. After merging:
+2. **Diff upstream's `deploy/` between the two releases** (`deploy.ps1`, `main.bicep`,
+   `modules/`), and the engine's settings (`engine/app/globals.py`). These roots mirror v3.6.0: a
+   new app setting, role or permission upstream needs a matching change here.
+3. `make ipam-fetch`, then `make ipam-platform-plan`. The zip's path includes the version, so the
+   plan shows the web app redeploying. Then `make ipam-platform-apply`.
 
-   ```sh
-   IPAM_APP_NAME=<app service> IPAM_RESOURCE_GROUP=<rg> make ipam-update
-   ```
+## The engine secret
 
-## Rotating the engine secret
-
-Part 1 gives the engine app registration a client secret valid for **2 years**. Nothing
-reminds you before it expires, so put the date in the team calendar. Rotating it means a new
-secret on the engine app registration, the Key Vault secret updated to match, and the app
-restarted. Follow Azure IPAM's own docs for the current steps.
+It's valid for two years, like upstream's. The first `make ipam-platform-apply` after it's a year
+old replaces it (`time_rotating`), writes the new one to Key Vault, and removes the old one. So
+**run an apply at least once a year.** `terraform -chdir=azure-ipam/platform output
+engine_secret_end_date` shows the current expiry.
 
 ## Teardown
 
-Delete the resource group **and** both app registrations. The app registrations are tenant
-objects, and they outlive the resource group.
+1. Part 2: set `ipam_enabled = false`, then plan and apply. That removes every Azure resource and
+   the engine secret.
+   - Key Vault keeps the deleted vault for 90 days (purge protection), so its name stays reserved.
+     A rebuild gets a new random suffix, so it doesn't collide.
+2. Part 1: `terraform -chdir=azure-ipam/entra destroy`, run by the tenant administrator. That
+   removes the app registrations, their service principals, the consent grants and the Reader
+   role. They're tenant objects, so they outlive part 2.
 
 ## Testing
 
-`make ipam-test` runs `scripts/test-azure-ipam.sh`. It puts stub `pwsh`, `git`, `curl` and
-`bicep` on the PATH, and asserts:
+`make ipam-test` runs `validate` and `terraform test` in both roots, against mocked `azuread`,
+`azurerm`, `random` and `time` providers.
 
-- the exact command every target runs;
-- that each pin and guard refuses when it should;
-- that the secret never reaches the output.
+- **Part 1** pins every value taken from `deploy.ps1`: permission and scope ids, the three consent
+  grants and their tenant-wide scope, the token version, the identifier URI, the pre-authorized
+  clients, and the wiring between the two apps.
+- **Part 2** pins:
+  - the app settings the engine reads (exactly, so an Oryx-build setting can't sneak in);
+  - the runtime;
+  - the Cosmos DB and Key Vault shape, and every role assignment;
+  - the secret's lifetime and rotation;
+  - the redirect URI;
+  - that nothing is planned while `ipam_enabled` is off;
+  - the credit-subscription refusal, and the zip SHA-256 check, which reads a stand-in zip in
+    `platform/tests/fixtures/` for real.
+- `make mutants` disables each validation in turn, in every root, and demands a red run.
 
-CI runs it with shellcheck.
-
-What it **can't** prove is that Microsoft's `deploy.ps1` accepts those commands. That was checked
-by reading its `v3.6.0` parameter sets, and only a real run proves it.
+What the mocks **can't** prove: that Entra and Azure accept these objects, and that the engine
+starts and signs users in. Only a real run proves that, and it needs a Global Administrator and a
+paid subscription.

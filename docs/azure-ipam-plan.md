@@ -1,7 +1,7 @@
 # Plan: Azure IPAM as the address authority, with AVNM taken on piece by piece
 
-**Status: nothing is deployed.** The address model below is decided. Two parts are built: the
-installer wrapper ([`azure-ipam/`](../azure-ipam/README.md), decision 4) and layer A's policy
+**Status: nothing is deployed.** The address model below is decided. Two parts are built: Azure
+IPAM's deployment as Terraform ([`azure-ipam/`](../azure-ipam/README.md), decision 4) and layer A's policy
 ([`infra/policy-onprem.tf`](../infra/policy-onprem.tf)). The inputs and the other decisions
 further down are still open.
 
@@ -150,7 +150,7 @@ Into its own resource group:
 | Cosmos DB (SQL API) | Autoscale, max 1000 RU/s |
 | Key Vault | Engine client secret, app IDs, tenant ID |
 | Log Analytics workspace | Diagnostics |
-| User-assigned managed identity | **Contributor** and **Managed Identity Operator** on the subscription |
+| User-assigned managed identity | **Contributor** and **Managed Identity Operator** on its resource group (the Bicep sets no scope, so they land there) |
 
 And in the Entra ID tenant:
 
@@ -172,12 +172,13 @@ that holds all the landing zones. Microsoft's docs *highly discourage* a non-roo
 root management group**, and **Global Administrator** for admin consent. The deploying account
 has none of the last two. So it's a two-part install:
 
-- **Part 1 (identities):** an Aberdeen tenant administrator runs `deploy.ps1 -AppsOnly`. It
-  writes `main.parameters.json`.
-- **Part 2 (infrastructure):** we run `deploy.ps1 -ParameterFile main.parameters.json`.
+- **Part 1 (identities):** an Aberdeen tenant administrator applies `azure-ipam/entra`. It makes
+  our deploying identity an owner of both app registrations.
+- **Part 2 (infrastructure):** we apply `azure-ipam/platform`. As an owner, it creates the
+  engine's client secret itself and puts it straight into Key Vault.
 
-⚠ `main.parameters.json` carries the engine's client secret. Hand it over securely and never
-commit it.
+`deploy.ps1 -AppsOnly` instead writes the secret into `main.parameters.json` for part 2. The
+Terraform split means nothing secret is ever handed over.
 
 ### Decision 3: cost and subscription
 
@@ -195,24 +196,31 @@ would be disabled with it.
 
 ### Decision 4: how this repo runs it (implemented)
 
-**The upstream script, pinned: see [`azure-ipam/`](../azure-ipam/README.md)** (the runbook,
-`ipam.sh`, and the `make ipam-*` targets). It pins release `v3.6.0`, its commit, and the SHA-256
-of its `ipam.zip`, and checks all three on every run. It always installs **native** (`-Native
--ZipFilePath`), because the default container install runs `ipam:latest` and would ignore the
-pin. Part 2 refuses credit subscriptions, and won't run without `IPAM_CONFIRM_COST=yes`.
+**Native Terraform: see [`azure-ipam/`](../azure-ipam/README.md)** (the runbook, two roots, and
+the `make ipam-*` targets). It replaced a pinned wrapper around `deploy.ps1` on 2026-09-11, at
+the user's request.
 
-It's outside Terraform state. The alternatives were a Terraform wrapper around the compiled
-ARM (`azurerm_resource_group_template_deployment` + `azuread`), or a native rewrite. Both are
-more work, and both drift from upstream.
+- It reproduces what `deploy.ps1` and its Bicep create at v3.6.0, with deliberate, listed
+  differences. The main one is that no secret is handed over (decision 2).
+- The pin lives in `azure-ipam/platform/release.json`: release, commit, the SHA-256 of
+  `ipam.zip`, and Python. Terraform refuses a zip that doesn't match.
+- The app runs the zip as a package (`WEBSITE_RUN_FROM_PACKAGE=1`), so its bundled dependencies,
+  built from upstream's lock file, are the ones that run. `deploy.ps1 -Native` rebuilds from the
+  unpinned `requirements.txt`, and the container install runs `ipam:latest`.
+- Part 2 is off until `ipam_enabled = true`, and refuses credit subscriptions.
+
+The cost of this choice: upgrades mean diffing upstream's `deploy/` between releases and
+carrying any change across by hand, instead of running Microsoft's updated script.
 
 ### Operating it
 
-- Rotate the engine secret before its 2-year expiry. Put that in the runbook, because nothing
-  reminds you.
-- Upgrade with `make ipam-update`, after bumping the pins in `azure-ipam/settings.sh`. Don't run
-  bare `update.ps1`: without `-ZipFilePath` it downloads `releases/latest`.
-- Teardown means the resource group **and** both app registrations. The app registrations are
-  tenant objects and outlive the resource group.
+- The engine secret lasts two years. The first part 2 apply after one year replaces it, so run
+  an apply at least once a year.
+- Upgrade by updating `azure-ipam/platform/release.json` in a PR, after diffing upstream's
+  `deploy/` between the releases (the runbook has the commands). Never run upstream's
+  `update.ps1`: without `-ZipFilePath` it downloads `releases/latest`.
+- Teardown means part 2 **and** part 1. The app registrations are tenant objects and outlive the
+  resource group.
 
 ## Open questions
 

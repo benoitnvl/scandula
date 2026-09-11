@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """Prove every variable validation is load-bearing.
 
-For each `validation` block in infra/variables.tf, swap its condition for one
-that always passes and run the test suite. At least one run must go red. If
-none does, nothing would notice that validation breaking: either it has no
-rejection run, or its run is really being caught by a different validation.
+For each `validation` block in a root's variables.tf (infra/ by default, or the
+directory given), swap its condition for one that always passes and run the
+test suite. At least one run must go red. If none does, nothing would notice
+that validation breaking: either it has no rejection run, or its run is really
+being caught by a different validation.
 
 The always-true condition is `can(var.<name>)` rather than `true`, because
 Terraform rejects a validation that doesn't refer to its own variable.
 
-It works on a temp copy of infra/, so an interrupted run can't leave a mutant
-behind. Run `make init-local` first.
+It works on a temp copy of the root, so an interrupted run can't leave a mutant
+behind. Initialise the root first (`make init-local`, `make ipam-test`).
 
-    make mutants              # TF=terraform
-    make mutants TF=tofu
+    make mutants              # every root; TF=terraform
+    python3 scripts/validation-mutants.py azure-ipam/platform
 """
 import os
 import pathlib
@@ -44,8 +45,10 @@ def load_tests():
 
 
 def write_tests(work, tests, exclude):
-    shutil.rmtree(work / "tests", ignore_errors=True)
-    (work / "tests").mkdir()
+    # Replace only the test files: tests/ can hold fixtures the runs read.
+    (work / "tests").mkdir(exist_ok=True)
+    for old in (work / "tests").glob("*.tftest.hcl"):
+        old.unlink()
     for name, (header, runs) in tests.items():
         kept = [text for run, text in runs if run not in exclude]
         if kept:
@@ -76,9 +79,12 @@ def main():
     untested = []
 
     with tempfile.TemporaryDirectory(prefix="scandula-mutants-") as tmp:
-        work = pathlib.Path(tmp)
-        for path in INFRA.glob("*.tf"):
-            shutil.copy2(path, work)
+        # The whole root, not just *.tf: configs read files (azure-ipam/platform's
+        # release.json, its tests/fixtures/). Never the local state, plans or zips.
+        work = pathlib.Path(tmp) / INFRA.name
+        shutil.copytree(INFRA, work, ignore=shutil.ignore_patterns(
+            ".terraform", ".terraform.lock.hcl", "*.tfstate*", "tfplan", "*.tfplan", ".work",
+            "backend.hcl", "terraform.tfvars", "*.auto.tfvars"))
         for name in (".terraform", ".terraform.lock.hcl"):
             if (INFRA / name).exists():
                 (work / name).symlink_to(INFRA / name)

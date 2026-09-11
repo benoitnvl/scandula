@@ -1,0 +1,11 @@
+# Copy to backend.hcl (gitignored) and fill in, then `make ipam-entra-init`.
+#
+# The same state account as infra/, under its own key. Whoever runs part 1 needs
+# Storage Blob Data Contributor on the container. This state holds no secret: part 1
+# creates no client secret (part 2 does).
+resource_group_name  = "rg-scandula-tfstate"
+storage_account_name = "stscandulatfstate"
+container_name       = "tfstate"
+key                  = "azure-ipam-entra.tfstate"
+
+use_azuread_auth = true

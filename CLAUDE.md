@@ -65,16 +65,23 @@ repo's `ipam_root_prefix`. Workloads move under AVNM piece by piece.
   address families, and a failed evaluation is a deny even under Audit. Without the guard,
   every dual-stack VNet is blocked.
 
-Azure IPAM is deployed by `azure-ipam/` (`make ipam-*`, runbook in its README), not Terraform:
+Azure IPAM is deployed by two Terraform roots in `azure-ipam/` (runbook in its README), not by
+Microsoft's `deploy.ps1`:
 
-- **Keep it native.** Don't switch it to Microsoft's container install, which runs `ipam:latest`
-  and ignores the pin.
-- **Change the three pins together** (release, commit, zip SHA-256) in `azure-ipam/settings.sh`,
-  in a PR.
-- **`main.parameters.json` holds the engine's client secret.** It's gitignored and must never
-  be printed or committed.
-- **Part 2 is cost-guarded,** like `secured_vwan_enabled`. Don't weaken the guard.
-- **Changed `ipam.sh`? Run `make ipam-test`** and add a case for the change.
+- `azure-ipam/entra` is part 1, the Entra ID objects, run by an Aberdeen tenant admin (Global
+  Administrator). `azure-ipam/platform` is part 2, the Azure resources, run by us. Part 1 makes
+  part 2's identities owners of both apps, so part 2 creates the engine secret itself. **No
+  secret is ever handed over.** Don't reintroduce a hand-over.
+- **The pin is `azure-ipam/platform/release.json`** (release, commit, zip SHA-256, Python).
+  Change it all together, in a PR. Terraform refuses a zip whose SHA-256 differs.
+- **Keep run-from-package** (`WEBSITE_RUN_FROM_PACKAGE=1`). An Oryx build
+  (`SCM_DO_BUILD_DURING_DEPLOYMENT`) installs the engine's unpinned `requirements.txt`, and the
+  container install runs `ipam:latest`: both ignore the pin.
+- **Part 2 is cost-guarded** (`ipam_enabled`, off by default) and refuses credit subscriptions.
+  Don't weaken either. **Part 2's state holds the engine secret.**
+- The roots mirror Azure/ipam v3.6.0's `deploy.ps1` and Bicep. On an upgrade, diff upstream's
+  `deploy/` between the two releases for new settings, roles or permissions, not just the zip.
+- Changed either root? `make ipam-test`, and `make mutants` after touching a `variables.tf`.
 
 ## Connectivity is Virtual WAN's, not AVNM's
 

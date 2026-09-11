@@ -1,0 +1,11 @@
+# Copy to backend.hcl (gitignored) and fill in, then `make ipam-platform-init`.
+#
+# The same state account as infra/, under its own key.
+# ⚠ This state holds the engine's client secret (azuread_application_password and
+# the Key Vault secret), so only the people who run part 2 should be able to read it.
+resource_group_name  = "rg-scandula-tfstate"
+storage_account_name = "stscandulatfstate"
+container_name       = "tfstate"
+key                  = "azure-ipam-platform.tfstate"
+
+use_azuread_auth = true

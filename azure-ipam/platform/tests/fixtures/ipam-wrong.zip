@@ -1,0 +1,1 @@
+Test fixture: a .zip that is NOT the one release.json pins. The pin check must refuse it.
