@@ -68,17 +68,20 @@ tfvars() {
 # ARM_SUBSCRIPTION_ID, and the token from GitHub (ARM_USE_OIDC), set by the workflow.
 # The state account can live in another subscription than the one being deployed to
 # (today it's the Visual Studio one): TFSTATE_SUBSCRIPTION_ID says which.
+# Each part has its own container, <prefix>-entra and <prefix>-platform, so each CI
+# identity can be given write access to its own state only. Part 2's state holds the
+# engine secret, and the entra identity must not be able to read it.
 init() {
   local root v sub=()
   root=$(root_of "$1")
-  for v in TFSTATE_RESOURCE_GROUP TFSTATE_STORAGE_ACCOUNT TFSTATE_CONTAINER; do
+  for v in TFSTATE_RESOURCE_GROUP TFSTATE_STORAGE_ACCOUNT TFSTATE_CONTAINER_PREFIX; do
     [ -n "${!v:-}" ] || die "$v is not set (a GitHub repository variable)"
   done
   if [ -n "${TFSTATE_SUBSCRIPTION_ID:-}" ]; then sub=(-backend-config="subscription_id=$TFSTATE_SUBSCRIPTION_ID"); fi
   "$TF" -chdir="$root" init -input=false -no-color \
     -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \
     -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \
-    -backend-config="container_name=$TFSTATE_CONTAINER" \
+    -backend-config="container_name=$TFSTATE_CONTAINER_PREFIX-$1" \
     -backend-config="key=azure-ipam-$1.tfstate" \
     -backend-config="use_azuread_auth=true" \
     -backend-config="use_oidc=true" \

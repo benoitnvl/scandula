@@ -62,7 +62,7 @@ same() { [ -n "$1" ] && [ "$1" = "$2" ]; }
 differ() { [ -n "$1" ] && [ -n "$2" ] && [ "$1" != "$2" ]; }
 
 OWNERS='["0e0e0e0e-0000-0000-0000-000000000001"]'
-STATE=(TFSTATE_RESOURCE_GROUP=rg-state TFSTATE_STORAGE_ACCOUNT=ststate TFSTATE_CONTAINER=tfstate-azure-ipam)
+STATE=(TFSTATE_RESOURCE_GROUP=rg-state TFSTATE_STORAGE_ACCOUNT=ststate TFSTATE_CONTAINER_PREFIX=tfstate-azure-ipam)
 
 # --- tfvars entra -------------------------------------------------------------------------
 echo "tfvars entra"
@@ -118,7 +118,7 @@ echo "init"
 run "${STATE[@]}" -- init platform
 ok "exits 0"                                   exited 0
 ok "inits part 2's root"                       has "$LOG" "-chdir=$REPO/azure-ipam/platform init -input=false -no-color"
-ok "  against the state container"             has_all "$LOG" "resource_group_name=rg-state" "storage_account_name=ststate" "container_name=tfstate-azure-ipam"
+ok "  against part 2's own container"          has_all "$LOG" "resource_group_name=rg-state" "storage_account_name=ststate" "container_name=tfstate-azure-ipam-platform"
 ok "  under its own key"                       has "$LOG" "key=azure-ipam-platform.tfstate"
 ok "  with Entra ID auth over OIDC"            has_all "$LOG" "use_azuread_auth=true" "use_oidc=true"
 ok "  in ARM_SUBSCRIPTION_ID's subscription by default" lacks "$LOG" "subscription_id="
@@ -126,19 +126,24 @@ ok "  in ARM_SUBSCRIPTION_ID's subscription by default" lacks "$LOG" "subscripti
 run "${STATE[@]}" TFSTATE_SUBSCRIPTION_ID=ee9dfbf0-0000-0000-0000-000000000000 -- init platform
 ok "  or in TFSTATE_SUBSCRIPTION_ID's"         has "$LOG" "subscription_id=ee9dfbf0-0000-0000-0000-000000000000"
 
+# One container per part, so neither identity needs write access to the other's state.
+run "${STATE[@]}" -- init entra
+ok "part 1 uses its own container"             has "$LOG" "container_name=tfstate-azure-ipam-entra"
+ok "  not part 2's"                            lacks "$LOG" "container_name=tfstate-azure-ipam-platform"
+
 run TFSTATE_RESOURCE_GROUP=rg-state TFSTATE_STORAGE_ACCOUNT=ststate -- init entra
 ok "refuses a missing state variable"          failed
 ok "  before calling terraform"                empty "$LOG"
 # set -u alone would also stop it, with bash's "unbound variable": pin the message that
 # says what to set.
-ok "  naming the repository variable to set"   has "$ERR" "TFSTATE_CONTAINER is not set (a GitHub repository variable)"
+ok "  naming the repository variable to set"   has "$ERR" "TFSTATE_CONTAINER_PREFIX is not set (a GitHub repository variable)"
 
 # --- entra-outputs ------------------------------------------------------------------------
 echo "entra-outputs"
 FULL='{"engine_client_id":{"value":"eeeeeeee-0000-0000-0000-00000000e001"},"engine_application_id":{"value":"/applications/aaaaaaaa-0000-0000-0000-00000000e001"},"ui_client_id":{"value":"bbbbbbbb-0000-0000-0000-00000000b001"},"ui_application_id":{"value":"/applications/aaaaaaaa-0000-0000-0000-00000000b001"},"tenant_id":{"value":"11111111-1111-1111-1111-111111111111"}}'
 run "${STATE[@]}" STUB_OUTPUTS="$FULL" -- entra-outputs
 ok "exits 0"                                   exited 0
-ok "reads part 1's state, not part 2's"        has_all "$LOG" "-chdir=$REPO/azure-ipam/entra init" "key=azure-ipam-entra.tfstate" "-chdir=$REPO/azure-ipam/entra output -json"
+ok "reads part 1's state, not part 2's"        has_all "$LOG" "-chdir=$REPO/azure-ipam/entra init" "container_name=tfstate-azure-ipam-entra" "key=azure-ipam-entra.tfstate" "-chdir=$REPO/azure-ipam/entra output -json"
 ok "passes the four ids part 2 needs"          has_all "$OUT" TF_VAR_engine_client_id=eeeeeeee-0000-0000-0000-00000000e001 \
   TF_VAR_engine_application_id=/applications/aaaaaaaa-0000-0000-0000-00000000e001 \
   TF_VAR_ui_client_id=bbbbbbbb-0000-0000-0000-00000000b001 \

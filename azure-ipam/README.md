@@ -101,9 +101,13 @@ secret. Apply part 1 first, and destroy part 2 first.
   requests OIDC tokens (`id-token: write`), and its `@claude` responder runs from `main` on
   issue comments. It would get a token these identities accept, and a comment could steer
   what it does with it.
-- The two Azure IPAM states live in their own container, `tfstate-azure-ipam`. **Only the two
-  CI identities can write it**, which is what keeps applies in GitHub. People get Storage Blob
-  Data Reader at most, and part 2's state holds the engine secret.
+- **Each part's state has its own container**: `tfstate-azure-ipam-entra` and
+  `tfstate-azure-ipam-platform`. That's what keeps applies in GitHub:
+  - Only the entra identity can write part 1's state.
+  - Only the platform identity can read or write part 2's, which holds the engine secret. The
+    entra identity can't read it.
+  - The platform identity can read part 1's state (for its outputs), but not write it.
+  - People get Storage Blob Data Reader at most.
 
 ⚠ **The entra identity is very powerful.** The tenant-wide consent grants need Graph
 `Directory.ReadWrite.All`, which makes it nearly as powerful as a Global Administrator. Any
@@ -182,15 +186,23 @@ for rp in Microsoft.Web Microsoft.DocumentDB Microsoft.KeyVault Microsoft.Manage
 done
 ```
 
-**3. The state container**, writable only by the two identities:
+**3. The state containers**, one per part, each writable only by its own identity:
 
 ```sh
 account_id=$(az storage account show -n stscandulatfstate -g rg-scandula-tfstate --query id -o tsv)
-az storage container create -n tfstate-azure-ipam --account-name stscandulatfstate --auth-mode login
-for app in "$entra_app" "$platform_app"; do
-  az role assignment create --assignee "$app" --role "Storage Blob Data Contributor" \
-    --scope "$account_id/blobServices/default/containers/tfstate-azure-ipam"
+containers="$account_id/blobServices/default/containers"
+for part in entra platform; do
+  az storage container create -n "tfstate-azure-ipam-$part" --account-name stscandulatfstate --auth-mode login
 done
+# Each identity writes its own state...
+az role assignment create --assignee "$entra_app" --role "Storage Blob Data Contributor" \
+  --scope "$containers/tfstate-azure-ipam-entra"
+az role assignment create --assignee "$platform_app" --role "Storage Blob Data Contributor" \
+  --scope "$containers/tfstate-azure-ipam-platform"
+# ...and part 2 only reads part 1's (for its outputs). The entra identity gets nothing on
+# part 2's container: that state holds the engine secret.
+az role assignment create --assignee "$platform_app" --role "Storage Blob Data Reader" \
+  --scope "$containers/tfstate-azure-ipam-entra"
 ```
 
 **4. Repository variables** (not secrets: these are identifiers):
@@ -203,7 +215,7 @@ gh variable set AZURE_CLIENT_ID_PLATFORM -R "$repo" --body "$platform_app"
 gh variable set TFSTATE_SUBSCRIPTION_ID  -R "$repo" --body "<the state account's subscription>"
 gh variable set TFSTATE_RESOURCE_GROUP   -R "$repo" --body rg-scandula-tfstate
 gh variable set TFSTATE_STORAGE_ACCOUNT  -R "$repo" --body stscandulatfstate
-gh variable set TFSTATE_CONTAINER        -R "$repo" --body tfstate-azure-ipam
+gh variable set TFSTATE_CONTAINER_PREFIX -R "$repo" --body tfstate-azure-ipam   # + -entra / -platform
 gh variable set IPAM_PLATFORM_OWNER_OBJECT_IDS -R "$repo" \
   --body "[\"$(az ad sp show --id "$platform_app" --query id -o tsv)\"]"
 ```

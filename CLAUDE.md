@@ -75,9 +75,11 @@ Microsoft's `deploy.ps1`:
 
 - `azure-ipam/entra` is part 1 (the Entra ID objects) and `azure-ipam/platform` is part 2 (the
   Azure resources). **Both are applied only by `.github/workflows/azure-ipam-deploy.yaml`**,
-  each as its own OIDC workload identity. There are no local apply targets, and only the two CI
-  identities can write their state container (`tfstate-azure-ipam`). Don't add a local apply
-  path back.
+  each as its own OIDC workload identity. There are no local apply targets. **Each part's state
+  has its own container** (`tfstate-azure-ipam-entra` and `-platform`), writable only by that
+  part's identity. The platform identity may also read part 1's, and the entra identity gets
+  nothing on part 2's, because that state holds the engine secret. Don't add a local apply
+  path back, and don't merge the containers.
 - Part 1 makes part 2's identity an owner of both apps, so part 2 creates the engine secret
   itself. **No secret is ever handed over.** Don't reintroduce a hand-over.
 - **An apply runs only with the digest of a reviewed plan** (`reviewed_digest`), because

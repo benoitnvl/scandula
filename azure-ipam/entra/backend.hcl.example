@@ -2,13 +2,13 @@
 # Part 1 is applied only by GitHub Actions (azure-ipam/README.md), which passes these
 # same settings itself.
 #
-# The same state account as infra/, in a container of its own: only the two CI
-# identities can write it (Storage Blob Data Contributor), and that is what keeps the
-# applies in GitHub. A person needs Storage Blob Data Reader to plan locally. This
-# state holds no secret.
+# The same state account as infra/, in part 1's own container. Only the entra CI
+# identity can write it; the platform identity can read it, for part 1's outputs.
+# That is what keeps the applies in GitHub. A person needs Storage Blob Data Reader
+# to plan locally. This state holds no secret.
 resource_group_name  = "rg-scandula-tfstate"
 storage_account_name = "stscandulatfstate"
-container_name       = "tfstate-azure-ipam"
+container_name       = "tfstate-azure-ipam-entra"
 key                  = "azure-ipam-entra.tfstate"
 
 use_azuread_auth = true
