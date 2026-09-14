@@ -107,9 +107,13 @@ Standard vWAN meshes its hubs itself, and spokes attach with
 here: a vWAN hub can't join a network group, and an AVNM hub-and-spoke config with a vWAN
 hub is preview and needs a vWAN connection policy that azurerm 5.4 can't set. Routing
 intent sends private **and** internet traffic through each hub's firewall. The shared
-policy's baseline (`firewall-rules.tf`) allows spoke↔spoke inside the root prefix and
-outbound HTTP/HTTPS; everything else is denied. Loosening it is a deliberate, reviewed
-change, and the tests pin its shape.
+policy allows **nothing by default** (`firewall-rules.tf`, since 2026-09-14): every flow and
+destination is named in `east_west_flows` / `egress_https_fqdns` / `egress_http_fqdns` /
+`egress_fqdn_tags`, validations refuse `"Any"` protocols, `"*"` ports and a bare `*` FQDN, and
+`rcg-baseline` isn't created while nothing is named. **Never reintroduce a blanket rule**: add
+a named entry, with who asked in its description. The firewalls' logs go to `log-<prefix>-hub`
+(`diagnostics.tf`); keep them on, because nothing else shows what the rules did. The target and
+what's still missing: `docs/zero-trust.md`.
 
 ## State, CI, and the one write path
 

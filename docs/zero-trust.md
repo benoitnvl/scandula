@@ -1,12 +1,20 @@
 # Plan: zero trust for Aberdeen's Azure network
 
-**Status: plan only.** Nothing here is built. It answers one question asked on 2026-09-14:
-is the current firewall baseline compatible with zero trust? It isn't, and this is what
-would replace it.
+**Status: steps 1 and 2 are built; the rest is plan.** It answers one question asked on
+2026-09-14: is the firewall baseline compatible with zero trust? It wasn't, and this is
+what replaced it.
 
-## Where we are
+| Step | State |
+|------|-------|
+| 1. Visibility (D5) | **built** for the firewalls: `infra/diagnostics.tf` sends both hubs to one workspace, `allLogs` into the dedicated `AZFW*` tables. NSG flow logs are not |
+| 2. Tighten the baseline (D1 east-west, D2 egress) | **built**: `infra/firewall-rules.tf` allows nothing unless it's named. The blanket rules are gone |
+| 3. Guardrail policies (D4) | plan |
+| 4. AVNM security admin rules (D1) | plan |
+| 5. Tier (D3), Bastion (D6), private endpoints and DNS (D7) | plan; needs Aberdeen |
 
-`infra/firewall-rules.tf` puts two rules on the shared hub policy:
+## Where we were
+
+Until 2026-09-14, `infra/firewall-rules.tf` put two rules on the shared hub policy:
 
 | Rule | Allows | Problem |
 |------|--------|---------|
@@ -18,9 +26,15 @@ new ranges. Routing intent steers traffic through the firewall, and the firewall
 nearly all of it: traffic is *seen*, not *controlled*. And with no diagnostics yet, it isn't
 even seen.
 
-What already helps: no inbound DNAT; private **and** internet traffic forced through the hub
+What already helped: no inbound DNAT; private **and** internet traffic forced through the hub
 firewall; on the control plane, OIDC with no stored secrets, an identity per Azure IPAM part,
 split state, Key Vault RBAC, and Cosmos DB key auth off.
+
+**Both rules are now gone.** Each flow and each destination is named in `east_west_flows`,
+`egress_https_fqdns`, `egress_http_fqdns` and `egress_fqdn_tags`; validations refuse `"Any"`
+protocols, `"*"` ports and a bare `*` FQDN; and the rule collection group isn't created at all
+while nothing is named. The firewalls' logs go to `log-<prefix>-hub`. What's below still
+stands for steps 3 to 5.
 
 ## What zero trust means here
 

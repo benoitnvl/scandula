@@ -50,29 +50,54 @@ flowchart TB
 
 ## Firewall rules
 
-`infra/firewall-rules.tf` puts one rule collection group, `rcg-baseline` (priority
-1000), on the shared policy. It's the baseline chosen on 2026-09-10:
+`infra/firewall-rules.tf` allows **nothing by default**. Everything the hub firewall
+permits is named, one entry at a time, in `terraform.tfvars` (the target in
+[zero-trust.md](zero-trust.md)):
 
-| Collection | Type | Allows |
-|------------|------|--------|
-| `allow-spoke-to-spoke` (1100) | network | any protocol and port, from `ipam_root_prefix` to `ipam_root_prefix` |
-| `allow-outbound-web` (1200) | application | HTTP 80 and HTTPS 443, from `ipam_root_prefix` to any FQDN |
+| Variable | Becomes | Refuses |
+|----------|---------|---------|
+| `east_west_flows` | one network rule per approved flow, in `allow-named-flows` (1100) | `"Any"` protocol, `"*"` ports, anything outside `ipam_root_prefix` |
+| `egress_https_fqdns` | `https-allowlist`, HTTPS 443 to those destinations | a bare `*` |
+| `egress_http_fqdns` | `http-revocation`, HTTP 80, for CRL and OCSP only | a bare `*` |
+| `egress_fqdn_tags` | `microsoft-fqdn-tags`, Microsoft-maintained destination sets | names that aren't tags |
 
-Everything else is denied, which is Azure Firewall's default, and there's no inbound
-DNAT. Both rules follow `ipam_root_prefix`, so every spoke IPAM hands out is covered
-without being listed, in either region.
+```hcl
+east_west_flows = {
+  app1-to-sql = {
+    description  = "app1 (eas) to the SQL MI (sea). Asked for by the app1 team, 2026-09-14."
+    sources      = ["10.64.1.0/24"]
+    destinations = ["10.68.2.0/24"]
+    protocols    = ["TCP"]
+    ports        = ["1433"]
+  }
+}
+egress_https_fqdns = ["login.microsoftonline.com", "*.ubuntu.com"]
+egress_fqdn_tags   = ["WindowsUpdate"]
+```
 
-The web rule is an *application* rule because Firewall Basic filters FQDNs only at the
+The rule collection group `rcg-baseline` (priority 1000) is only created when something
+is named: Azure rejects an empty group, and "no rules" is the right state until a
+workload asks for one. Everything unnamed is denied, which is Azure Firewall's default,
+and there is no inbound DNAT.
+
+⚠ **Until 2026-09-14 this was a blanket pair**: any protocol and port between anything
+IPAM handed out, plus 80/443 to any FQDN. Both widened by themselves as IPAM allocated.
+They were replaced after the question "is opening 80/443 across the spokes wise in zero
+trust?". It wasn't.
+
+Egress rules are *application* rules because Firewall Basic filters FQDNs only at the
 application level (SNI for HTTPS). Network-level FQDN rules need the firewall's DNS
-proxy, and Basic doesn't have one. Threat intelligence on Basic is alert-only.
+proxy, which Basic doesn't have, and Basic can't inspect what it allows at all: see
+[zero-trust.md](zero-trust.md) for what the tiers cost.
 
-Anything beyond this baseline, such as a specific port out, DNAT in, or on-premises
-ranges once `reserved_prefixes` is set, goes in its own rule collection group.
+## Firewall logs
 
-⚠ **This baseline is not zero trust**, and is meant to be replaced: `allow-spoke-to-spoke`
-permits any port between anything IPAM hands out, and the web rule allows any FQDN. See
-[zero-trust.md](zero-trust.md) for the target (default-deny east-west, an egress allow-list,
-AVNM security admin rules and guardrail policies) and what it costs.
+`infra/diagnostics.tf` sends both hub firewalls to one Log Analytics workspace,
+`log-<prefix>-hub`, as **`allLogs` into the dedicated `AZFW*` tables** plus metrics.
+Without it, nothing the rules allow or refuse can be checked.
+
+It is built with the hubs and can be turned off with `firewall_diagnostics_enabled`.
+The workspace is free; ingestion and `log_retention_days` (30 by default) are not.
 
 ## Cost
 

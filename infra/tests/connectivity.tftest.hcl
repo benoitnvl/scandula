@@ -44,6 +44,9 @@ mock_provider "azurerm" {
   mock_resource "azurerm_firewall_policy" {
     defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.Network/firewallPolicies/afwp-mock" }
   }
+  mock_resource "azurerm_log_analytics_workspace" {
+    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.OperationalInsights/workspaces/log-mock" }
+  }
   mock_resource "azurerm_firewall" {
     defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.Network/azureFirewalls/afw-mock" }
   }
@@ -136,41 +139,11 @@ run "enabled_builds_a_secured_hub_per_region" {
     error_message = "The policy tier must match the firewall tier."
   }
 
+  # What the firewall allows now lives in tests/firewall.tftest.hcl. With nothing
+  # named, there are no rules at all, which is the point.
   assert {
-    condition = (
-      length(azurerm_firewall_policy_rule_collection_group.baseline) == 1 &&
-      azurerm_firewall_policy_rule_collection_group.baseline[0].firewall_policy_id == azurerm_firewall_policy.this[0].id
-    )
-    error_message = "The baseline rules must sit on the shared hub policy."
-  }
-
-  assert {
-    condition = (
-      length(azurerm_firewall_policy_rule_collection_group.baseline[0].network_rule_collection) == 1 &&
-      alltrue([for c in azurerm_firewall_policy_rule_collection_group.baseline[0].network_rule_collection :
-        c.action == "Allow" && alltrue([for r in c.rule :
-          toset(r.source_addresses) == toset([var.ipam_root_prefix]) &&
-          toset(r.destination_addresses) == toset([var.ipam_root_prefix])
-      ])])
-    )
-    error_message = "Network rules may only allow traffic inside the root prefix (spoke to spoke)."
-  }
-
-  assert {
-    condition = (
-      length(azurerm_firewall_policy_rule_collection_group.baseline[0].application_rule_collection) == 1 &&
-      alltrue([for c in azurerm_firewall_policy_rule_collection_group.baseline[0].application_rule_collection :
-        c.action == "Allow" && alltrue([for r in c.rule :
-          toset(r.source_addresses) == toset([var.ipam_root_prefix]) &&
-          toset([for p in r.protocols : "${p.type}:${p.port}"]) == toset(["Http:80", "Https:443"])
-      ])])
-    )
-    error_message = "Outbound internet must be HTTP/HTTPS only, and only from inside the root prefix."
-  }
-
-  assert {
-    condition     = length(azurerm_firewall_policy_rule_collection_group.baseline[0].nat_rule_collection) == 0
-    error_message = "The baseline allows no inbound DNAT."
+    condition     = length(azurerm_firewall_policy_rule_collection_group.baseline) == 0
+    error_message = "With no named flows and no egress destinations, the firewall must have no rules: everything is denied."
   }
 
   assert {
@@ -201,26 +174,6 @@ run "one_region_builds_one_hub" {
   assert {
     condition     = length(azurerm_virtual_hub.this) == 1 && length(azurerm_firewall.hub) == 1 && length(azurerm_virtual_hub_routing_intent.this) == 1
     error_message = "One region, one secured hub."
-  }
-}
-
-run "baseline_rules_follow_the_root_prefix" {
-  command = plan
-
-  variables {
-    secured_vwan_enabled = true
-    ipam_root_prefix     = "10.80.0.0/12"
-    regions = {
-      eas = { location = "eastasia", address_prefix = "10.80.0.0/14", hub_address_prefix = "10.80.0.0/23" }
-    }
-  }
-
-  assert {
-    condition = (
-      toset(one(one(azurerm_firewall_policy_rule_collection_group.baseline[0].network_rule_collection).rule).source_addresses) == toset(["10.80.0.0/12"]) &&
-      toset(one(one(azurerm_firewall_policy_rule_collection_group.baseline[0].application_rule_collection).rule).source_addresses) == toset(["10.80.0.0/12"])
-    )
-    error_message = "The rules must follow ipam_root_prefix, not a hardcoded range."
   }
 }
 
