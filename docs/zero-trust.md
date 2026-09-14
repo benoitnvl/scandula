@@ -46,19 +46,12 @@ stands for steps 3 to 5.
 
 ## The target
 
-```mermaid
-flowchart TB
-  policy["Azure Policy guardrails (layer C)<br/>NSG required · no public IPs · no bypass routes · PaaS private"]
-  avnm["AVNM security admin rules (tenant baseline)<br/>evaluated BEFORE NSGs, workload owners cannot override"]
-  nsg["NSG + ASG in each spoke<br/>owned by the workload repo"]
-  fw["Hub Azure Firewall<br/>east-west: named flows only<br/>egress: FQDN allow-list, inspected"]
-  logs["Log Analytics<br/>firewall logs · NSG flow logs · policy compliance"]
+![scandula zero-trust enforcement layers: Azure Policy guardrails, AVNM security admin rules and spoke NSGs above the hub firewall, which denies by default and logs to a workspace; inspection needs the Premium tier](diagrams/zero-trust.svg)
 
-  policy --> avnm --> nsg --> fw --> logs
-```
+Source: [`diagrams/zero-trust.drawio`](diagrams/zero-trust.drawio), re-exported with `make diagram`.
 
 Four enforcement points, each catching what the one before it can't, and one place to look
-when something is refused.
+when something is refused. Layers 4 and the logging are built; 1, 2 and 5 are not.
 
 ## Decisions to take
 
