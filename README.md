@@ -36,7 +36,8 @@ hub**, see [docs/design.md](docs/design.md#cost)):
 | Virtual WAN | `vwan-scandula` | Standard (Basic can't host a firewall) |
 | Virtual hub | `vhub-scandula-<region>` | Standard, on `hub_address_prefix` |
 | Firewall policy | `afwp-scandula` | shared by every hub |
-| Rule collection group | `rcg-baseline` | spoke↔spoke inside the root prefix + outbound HTTP/HTTPS; everything else denied |
+| Rule collection group | `rcg-baseline` | only the flows and destinations named in `east_west_flows` / `egress_*`; everything else denied. Not created when nothing is named |
+| Log Analytics workspace | `log-scandula-hub` | the hub firewalls' logs (`allLogs`, dedicated tables); `firewall_diagnostics_enabled` |
 | Azure Firewall | `afw-scandula-<region>` | `AZFW_Hub`, tier `firewall_sku_tier` (default **Basic**) |
 | Routing intent | `ri-scandula-<region>` | internet **and** private traffic through that hub's firewall |
 

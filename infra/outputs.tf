@@ -63,3 +63,16 @@ output "avnm_allocation_policy_assignment_ids" {
     { for k, a in azurerm_subscription_policy_assignment.avnm_allocation : k => a.id },
   )
 }
+
+output "firewall_log_analytics_workspace_id" {
+  description = "Where the hub firewalls send their logs. Null while the hubs are off or firewall_diagnostics_enabled is false."
+  value       = one(azurerm_log_analytics_workspace.hub[*].id)
+}
+
+output "firewall_rules_named" {
+  description = "What the hub firewall allows: east-west flow names, and the count of egress destinations. Empty means deny-all."
+  value = {
+    east_west_flows     = keys(var.east_west_flows)
+    egress_destinations = local.egress_destinations
+  }
+}

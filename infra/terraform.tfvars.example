@@ -52,6 +52,26 @@ regions = {
   }
 }
 
+# What the hub firewall allows. Nothing, until it's named here (docs/zero-trust.md).
+# Validations refuse "Any" protocols, "*" ports and a bare "*" FQDN, so a rule can't
+# quietly widen back into the blanket pair this replaced.
+# east_west_flows = {
+#   app1-to-sql = {
+#     description  = "app1 (eas) to the SQL MI (sea). Asked for by the app1 team, 2026-09-14."
+#     sources      = ["10.64.1.0/24"]
+#     destinations = ["10.68.2.0/24"]
+#     protocols    = ["TCP"]
+#     ports        = ["1433"]
+#   }
+# }
+# egress_https_fqdns = ["login.microsoftonline.com", "*.ubuntu.com"]
+# egress_http_fqdns  = ["ocsp.digicert.com"]   # certificate revocation only
+# egress_fqdn_tags   = ["WindowsUpdate"]
+
+# The hub firewalls' logs. On by default with the hubs; ingestion is the cost.
+# firewall_diagnostics_enabled = true
+# log_retention_days           = 30
+
 # ⚠ COST. Two secured hubs (Standard hub + Basic firewall) are about $942/month
 # before data processing. On a Visual Studio credit subscription that runs out in
 # under two days and the subscription is disabled. Leave this false there.

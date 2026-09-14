@@ -302,3 +302,132 @@ variable "avnm_allocation_policy" {
     error_message = "avnm_allocation_policy assignment keys must be 1-19 lowercase letters, digits or hyphens."
   }
 }
+
+# --- zero trust: what the hub firewall allows (docs/zero-trust.md) -------------------
+#
+# Nothing is allowed by default. Each flow and each destination is named here, so the
+# permission never widens on its own as IPAM hands out new ranges.
+
+variable "east_west_flows" {
+  description = <<-EOT
+    Traffic allowed between spokes, one entry per approved flow. Empty means spokes
+    can't reach each other at all, which is the default.
+
+      sources / destinations  canonical CIDRs inside ipam_root_prefix
+      protocols               TCP, UDP or ICMP. "Any" is refused
+      ports                   e.g. ["443", "1433", "8000-8100"]. "*" is refused
+
+    Key names the rule (1-40 lowercase letters, digits, hyphens). Put who asked and why
+    in the description: it's the audit trail.
+  EOT
+  type = map(object({
+    description  = string
+    sources      = list(string)
+    destinations = list(string)
+    protocols    = list(string)
+    ports        = list(string)
+  }))
+  default  = {}
+  nullable = false
+
+  validation {
+    condition     = alltrue([for k in keys(var.east_west_flows) : can(regex("^[a-z0-9-]{1,40}$", k))])
+    error_message = "east_west_flows keys must be 1-40 lowercase letters, digits or hyphens: they become rule names."
+  }
+
+  validation {
+    condition     = alltrue([for f in values(var.east_west_flows) : length(f.sources) > 0 && length(f.destinations) > 0 && length(f.protocols) > 0 && length(f.ports) > 0])
+    error_message = "Every east_west_flows entry needs at least one source, destination, protocol and port."
+  }
+
+  # Inside the root prefix: a flow may only name space this repo hands out.
+  validation {
+    condition = alltrue(flatten([for f in values(var.east_west_flows) : [for p in concat(f.sources, f.destinations) : try(
+      cidrsubnet(p, 0, 0) == p &&
+      tonumber(split("/", p)[1]) >= tonumber(split("/", var.ipam_root_prefix)[1]) &&
+      cidrsubnet(format("%s/%s", cidrhost(p, 0), split("/", var.ipam_root_prefix)[1]), 0, 0) == cidrsubnet(var.ipam_root_prefix, 0, 0),
+    false)]]))
+    error_message = "Every east_west_flows source and destination must be a canonical CIDR inside ipam_root_prefix."
+  }
+
+  # "Any" and "*" are how a named flow turns back into the blanket rule this replaced.
+  validation {
+    condition     = alltrue(flatten([for f in values(var.east_west_flows) : [for p in f.protocols : contains(["TCP", "UDP", "ICMP"], p)]]))
+    error_message = "east_west_flows protocols must be TCP, UDP or ICMP. \"Any\" is not allowed: name the protocol."
+  }
+
+  validation {
+    condition     = alltrue(flatten([for f in values(var.east_west_flows) : [for p in f.ports : can(regex("^[0-9]{1,5}(-[0-9]{1,5})?$", p))]]))
+    error_message = "east_west_flows ports must be a port or a range, e.g. \"443\" or \"8000-8100\". \"*\" is not allowed: name the ports."
+  }
+
+  # The regex above is shape only: "0" and "99999" match it, and azurerm accepts them,
+  # so an impossible port would only fail against Azure at apply. (A reversed range like
+  # "8100-8000" is the exception: azurerm rejects that itself, at plan.)
+  validation {
+    condition = alltrue(flatten([for f in values(var.east_west_flows) : [for p in f.ports : try(
+      alltrue([for n in split("-", p) : tonumber(n) >= 1 && tonumber(n) <= 65535]) &&
+      tonumber(split("-", p)[0]) <= tonumber(element(split("-", p), length(split("-", p)) - 1)),
+    false)]]))
+    error_message = "east_west_flows ports must be 1-65535, and a range must run low to high, e.g. \"8000-8100\"."
+  }
+}
+
+variable "egress_https_fqdns" {
+  description = "Destinations spokes may reach on HTTPS 443, e.g. [\"login.microsoftonline.com\", \"*.ubuntu.com\"]. Empty means no egress at all."
+  type        = list(string)
+  default     = []
+  nullable    = false
+
+  validation {
+    condition     = alltrue([for f in var.egress_https_fqdns : can(regex("^(\\*\\.)?([a-z0-9-]+\\.)+[a-z]{2,}$", f))])
+    error_message = "egress_https_fqdns must be lowercase FQDNs, optionally starting \"*.\". A bare \"*\" is not allowed: that's the wildcard this replaced."
+  }
+}
+
+variable "egress_http_fqdns" {
+  description = "Destinations spokes may reach on plain HTTP 80. Keep this for certificate revocation (CRL, OCSP) only: anything else belongs on 443."
+  type        = list(string)
+  default     = []
+  nullable    = false
+
+  validation {
+    condition     = alltrue([for f in var.egress_http_fqdns : can(regex("^(\\*\\.)?([a-z0-9-]+\\.)+[a-z]{2,}$", f))])
+    error_message = "egress_http_fqdns must be lowercase FQDNs, optionally starting \"*.\". A bare \"*\" is not allowed."
+  }
+}
+
+variable "egress_fqdn_tags" {
+  description = "Microsoft FQDN tags spokes may reach, e.g. [\"WindowsUpdate\", \"AzureBackup\"]: Microsoft maintains the addresses behind each."
+  type        = list(string)
+  default     = []
+  nullable    = false
+
+  validation {
+    condition     = alltrue([for t in var.egress_fqdn_tags : can(regex("^[A-Za-z][A-Za-z0-9.-]{1,40}$", t))])
+    error_message = "egress_fqdn_tags must be Microsoft FQDN tag names, e.g. WindowsUpdate."
+  }
+}
+
+variable "firewall_diagnostics_enabled" {
+  description = <<-EOT
+    Send the hub firewalls' logs and metrics to a Log Analytics workspace. On by
+    default, but only builds anything when secured_vwan_enabled is true: without logs
+    there's no way to tell what the rules above actually allowed or refused. The
+    workspace itself is free; ingestion and retention are not.
+  EOT
+  type        = bool
+  default     = true
+  nullable    = false
+}
+
+variable "log_retention_days" {
+  description = "How long the firewall logs are kept in Log Analytics."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.log_retention_days >= 30 && var.log_retention_days <= 730
+    error_message = "log_retention_days must be between 30 and 730."
+  }
+}
