@@ -50,8 +50,8 @@ stands for steps 3 to 5.
 
 Source: [`diagrams/zero-trust.drawio`](diagrams/zero-trust.drawio), re-exported with `make diagram`.
 
-Four enforcement points, each catching what the one before it can't, and one place to look
-when something is refused. Layers 4 and the logging are built; 1, 2 and 5 are not.
+Five numbered layers, each catching what the one before it can't, plus one place to look when
+something is refused. Layer 4 and the logging are built; layers 1, 2 and 5 are not.
 
 ## Decisions to take
 
