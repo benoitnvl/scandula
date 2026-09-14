@@ -69,6 +69,11 @@ proxy, and Basic doesn't have one. Threat intelligence on Basic is alert-only.
 Anything beyond this baseline, such as a specific port out, DNAT in, or on-premises
 ranges once `reserved_prefixes` is set, goes in its own rule collection group.
 
+⚠ **This baseline is not zero trust**, and is meant to be replaced: `allow-spoke-to-spoke`
+permits any port between anything IPAM hands out, and the web rule allows any FQDN. See
+[zero-trust.md](zero-trust.md) for the target (default-deny east-west, an egress allow-list,
+AVNM security admin rules and guardrail policies) and what it costs.
+
 ## Cost
 
 Azure retail prices (USD, `prices.azure.com`, checked 2026-09-10):

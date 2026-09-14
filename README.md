@@ -81,6 +81,7 @@ docs/
   bootstrap.md       one-time: state account, RP registration, first apply
   design.md          topology, address plan, cost, what's deliberately not here yet
   azure-ipam-plan.md the address authority: Azure IPAM, the on-premises policy, migration
+  zero-trust.md      plan: default-deny east-west, an egress allow-list, guardrail policies
   diagrams/          architecture.drawio + the exported architecture.svg (`make diagram`)
 scripts/
   validation-mutants.py   `make mutants`: proves every validation is actually tested
