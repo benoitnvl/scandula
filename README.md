@@ -1,13 +1,15 @@
 # scandula
 
 Terraform for Aberdeen's **Azure connectivity core**: a **secured Virtual WAN** (one
-Standard hub per region, each with an Azure Firewall and routing intent), with the
-address plan owned by **Azure Virtual Network Manager (AVNM) IPAM**.
+Standard hub per region, each with an Azure Firewall and routing intent), addressed from
+**Azure Virtual Network Manager (AVNM) IPAM**. AVNM runs **one block**, delegated to it by
+**Azure IPAM**, which is the authority for all of Aberdeen's address space
+([docs/azure-ipam-plan.md](docs/azure-ipam-plan.md)).
 
 This is an Aberdeen project. It isn't part of the benoitnvl homelab estate and shares
 nothing with it: no address space, DNS or connectivity.
 
-![scandula architecture: AVNM IPAM pools, and a secured Virtual WAN with hubs in East Asia and Southeast Asia, each with an Azure Firewall, routing intent and the shared baseline policy](docs/diagrams/architecture.svg)
+![scandula architecture: Azure IPAM delegates one block to scandula's AVNM IPAM pools, and a secured Virtual WAN with hubs in East Asia and Southeast Asia, each with an Azure Firewall, routing intent and the shared baseline policy](docs/diagrams/architecture.svg)
 
 Source: [`docs/diagrams/architecture.drawio`](docs/diagrams/architecture.drawio). Edit it in
 draw.io, then run `make diagram` to re-export the SVG. The SVG embeds the diagram, so it
