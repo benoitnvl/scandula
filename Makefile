@@ -51,8 +51,10 @@ mutants: ## Disable each validation in turn, in every root; some test must go re
 	done
 
 .PHONY: diagram
-diagram: ## Re-export docs/diagrams/architecture.svg from its .drawio source (needs the draw.io desktop app)
-	drawio --export --format svg --embed-diagram --border 20 --output docs/diagrams/architecture.svg docs/diagrams/architecture.drawio
+diagram: ## Re-export every docs/diagrams/*.svg from its .drawio source (needs the draw.io desktop app)
+	@for d in docs/diagrams/*.drawio; do \
+	  drawio --export --format svg --embed-diagram --border 20 --output "$${d%.drawio}.svg" "$$d" || exit 1; \
+	done
 
 .PHONY: plan
 plan: check ## terraform plan -out=tfplan
