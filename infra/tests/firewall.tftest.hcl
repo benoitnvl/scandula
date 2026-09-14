@@ -327,6 +327,14 @@ run "rejects_a_flow_with_all_ports" {
   expect_failures = [var.east_west_flows]
 }
 
+run "rejects_a_port_out_of_range" {
+  command = plan
+  variables {
+    east_west_flows = { x = { description = "d", sources = ["10.64.1.0/24"], destinations = ["10.64.2.0/24"], protocols = ["TCP"], ports = ["99999"] } }
+  }
+  expect_failures = [var.east_west_flows]
+}
+
 run "rejects_a_flow_outside_the_root" {
   command = plan
   variables {

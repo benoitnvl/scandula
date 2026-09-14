@@ -360,6 +360,17 @@ variable "east_west_flows" {
     condition     = alltrue(flatten([for f in values(var.east_west_flows) : [for p in f.ports : can(regex("^[0-9]{1,5}(-[0-9]{1,5})?$", p))]]))
     error_message = "east_west_flows ports must be a port or a range, e.g. \"443\" or \"8000-8100\". \"*\" is not allowed: name the ports."
   }
+
+  # The regex above is shape only: "0" and "99999" match it, and azurerm accepts them,
+  # so an impossible port would only fail against Azure at apply. (A reversed range like
+  # "8100-8000" is the exception: azurerm rejects that itself, at plan.)
+  validation {
+    condition = alltrue(flatten([for f in values(var.east_west_flows) : [for p in f.ports : try(
+      alltrue([for n in split("-", p) : tonumber(n) >= 1 && tonumber(n) <= 65535]) &&
+      tonumber(split("-", p)[0]) <= tonumber(element(split("-", p), length(split("-", p)) - 1)),
+    false)]]))
+    error_message = "east_west_flows ports must be 1-65535, and a range must run low to high, e.g. \"8000-8100\"."
+  }
 }
 
 variable "egress_https_fqdns" {
