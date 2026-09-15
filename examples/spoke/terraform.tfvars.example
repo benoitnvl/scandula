@@ -1,0 +1,52 @@
+# Copy to terraform.tfvars (gitignored) in the repo that owns the spoke.
+
+name     = "payments"
+location = "eastasia"
+
+# From the connectivity repo: `terraform output ipam_region_pool_ids`.
+ipam_pool_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-scandula-connectivity/providers/Microsoft.Network/networkManagers/avnm-scandula/ipamPools/ipam-scandula-eas"
+
+# A /22. Ask for what the spoke needs plus room to grow: growing later means a
+# second allocation, not a bigger one.
+vnet_address_count = 1024
+
+subnets = {
+  # A /24 each.
+  snet-app = {
+    address_count = 256
+    allow_inbound = {
+      from-web-tier = {
+        description = "Web tier calls the app API. Asked for by <name>, <date>."
+        sources     = ["10.64.4.0/24"] # the web subnet's allocated prefix
+        protocol    = "Tcp"
+        ports       = "8443"
+      }
+    }
+  }
+  snet-data = {
+    address_count = 256
+    allow_inbound = {
+      from-app-tier = {
+        description = "App tier reads PostgreSQL. Asked for by <name>, <date>."
+        sources     = ["10.64.5.0/24"]
+        protocol    = "Tcp"
+        ports       = "5432"
+      }
+      # A service tag goes on its own — azurerm won't mix tags and CIDRs in one rule.
+      health-probe = {
+        description = "Load balancer health probes."
+        sources     = ["AzureLoadBalancer"]
+        protocol    = "Tcp"
+        ports       = "5432"
+      }
+    }
+  }
+}
+
+# From the connectivity repo: `terraform output virtual_hubs`. Leave it out while
+# secured_vwan_enabled is false — the VNet and its allocation still get built.
+# virtual_hub_id = "/subscriptions/.../providers/Microsoft.Network/virtualHubs/vhub-scandula-eas"
+
+tags = {
+  workload = "payments"
+}

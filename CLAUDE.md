@@ -145,6 +145,13 @@ a named entry, with who asked in its description. The firewalls' logs go to `log
 (`diagnostics.tf`); keep them on, because nothing else shows what the rules did. The target and
 what's still missing: `docs/zero-trust.md`.
 
+`examples/spoke` is the pattern a workload team copies: VNet and subnets allocate from the
+region pool with `ip_address_pool`, so **no spoke ever writes a CIDR** — that's what makes
+layer B pass. It's never applied from here (no backend, no apply target), but it's in the CI
+matrix, in `make mutants`, and has `make spoke-test`: an example that has rotted is worse than
+no example. If you change it, keep the assertions that nothing sets `address_space` or
+`address_prefixes`.
+
 ## State, CI, and the one write path
 
 - State lives in Azure Storage (`backend "azurerm" {}` + gitignored `infra/backend.hcl`),

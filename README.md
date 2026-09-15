@@ -71,6 +71,7 @@ infra/
   firewall-rules.tf  baseline rule collection group on the shared policy (gated)
   policy-onprem.tf   Azure Policy: no VNet may overlap reserved_prefixes (gated)
   policy-avnm.tf     Azure Policy: VNets in migrated scopes must allocate from AVNM IPAM (gated)
+  diagnostics.tf     firewall logs → Log Analytics (gated)
   outputs.tf         pool ids, hub ids + firewall IPs, firewall policy id, policy ids
   tests/             terraform test — mocked azurerm, no credentials
   backend.hcl.example
@@ -80,6 +81,9 @@ netbox/              the address authority (`make netbox-*`; runbook in its READ
   records/           the address plan as data, through the NetBox API
 azure-ipam/          ⚠ DORMANT — Microsoft's Azure IPAM, which NetBox replaced. Never
                      applied; kept as the fallback. Don't dispatch its workflow
+examples/
+  spoke/             a spoke VNet addressed from an AVNM IPAM pool — copy into the
+                     workload's own repo. Never applied from here; CI validates and tests it
 docs/
   bootstrap.md       one-time: state account, RP registration, first apply
   design.md          topology, address plan, cost, what's deliberately not here yet

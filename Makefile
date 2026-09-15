@@ -7,6 +7,11 @@ SHELL := /bin/bash
 TF ?= terraform
 TF_DIR := infra
 
+# examples/spoke is a copy-me root, never applied from here — but it is validated,
+# tested and mutated like the rest, because an example that has rotted is worse
+# than no example.
+SPOKE := examples/spoke
+
 .DEFAULT_GOAL := help
 
 .PHONY: help
@@ -43,9 +48,15 @@ validate: ## terraform validate
 test: ## terraform test — plan-only against a mocked azurerm, no Azure creds needed
 	$(TF) -chdir=$(TF_DIR) test
 
+.PHONY: spoke-test
+spoke-test: ## terraform validate + test for examples/spoke (mocked azurerm, no creds)
+	$(TF) -chdir=$(SPOKE) init -backend=false -input=false >/dev/null
+	$(TF) -chdir=$(SPOKE) validate
+	$(TF) -chdir=$(SPOKE) test
+
 .PHONY: mutants
-mutants: ## Disable each validation in turn, in every root; some test must go red (after init-local, ipam-test, netbox-test)
-	@for d in $(TF_DIR) $(IPAM_ENTRA) $(IPAM_PLATFORM) $(NETBOX_PLATFORM) $(NETBOX_RECORDS); do \
+mutants: ## Disable each validation in turn, in every root; some test must go red (after init-local, ipam-test, netbox-test, spoke-test)
+	@for d in $(TF_DIR) $(IPAM_ENTRA) $(IPAM_PLATFORM) $(NETBOX_PLATFORM) $(NETBOX_RECORDS) $(SPOKE); do \
 	  echo "== $$d"; \
 	  TF=$(TF) python3 scripts/validation-mutants.py $$d || exit 1; \
 	done
@@ -70,7 +81,10 @@ output: ## terraform output
 
 .PHONY: lock
 lock: ## Regenerate .terraform.lock.hcl for CI (linux_amd64) and Macs (darwin_arm64)
-	$(TF) -chdir=$(TF_DIR) providers lock -platform=linux_amd64 -platform=darwin_arm64
+	@# infra and the spoke example share the same azurerm constraint, so a bump is one job.
+	@for d in $(TF_DIR) $(SPOKE); do \
+	  $(TF) -chdir=$$d providers lock -platform=linux_amd64 -platform=darwin_arm64 || exit 1; \
+	done
 
 ## --- NetBox (netbox/README.md): the address authority ---
 ## netbox/platform runs NetBox on Azure (off until netbox_enabled = true; it costs
