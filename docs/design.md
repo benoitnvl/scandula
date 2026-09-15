@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TB
-  azipam["Azure IPAM (azure-ipam/)<br/>authority for ALL of Aberdeen's address space:<br/>landing zones, on-premises, and the block below"]
+  azipam["NetBox (netbox/)<br/>authority for ALL of Aberdeen's address space:<br/>landing zones, on-premises, and the block below"]
 
   subgraph cp["rg-scandula-connectivity · avnm-scandula (IPAM) · eastasia"]
     root["IPAM root pool<br/>10.64.0.0/12"]
@@ -29,9 +29,9 @@ flowchart TB
   spokesSea["spokes in southeastasia"] --> hubSea
 ```
 
-- **AVNM IPAM owns this repo's block, not the whole plan.** Azure IPAM is the authority for
+- **AVNM IPAM owns this repo's block, not the whole plan.** NetBox is the authority for
   all of Aberdeen's address space and delegates one block here, `ipam_root_prefix`
-  ([azure-ipam-plan.md](azure-ipam-plan.md)). Inside it, spokes allocate from their region's
+  ([netbox-plan.md](netbox-plan.md)). Inside it, spokes allocate from their region's
   pool (the `ipam_region_pool_ids` output). A vWAN hub isn't a VNet, so its range is written
   explicitly and **reserved** as a static CIDR on the region pool. The reservation
   exists even while the hubs are off, so the plan doesn't change shape when they're

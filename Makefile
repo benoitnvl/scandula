@@ -44,8 +44,8 @@ test: ## terraform test — plan-only against a mocked azurerm, no Azure creds n
 	$(TF) -chdir=$(TF_DIR) test
 
 .PHONY: mutants
-mutants: ## Disable each validation in turn, in every root; some test must go red (after init-local + ipam-test)
-	@for d in $(TF_DIR) $(IPAM_ENTRA) $(IPAM_PLATFORM); do \
+mutants: ## Disable each validation in turn, in every root; some test must go red (after init-local, ipam-test, netbox-test)
+	@for d in $(TF_DIR) $(IPAM_ENTRA) $(IPAM_PLATFORM) $(NETBOX_PLATFORM) $(NETBOX_RECORDS); do \
 	  echo "== $$d"; \
 	  TF=$(TF) python3 scripts/validation-mutants.py $$d || exit 1; \
 	done
@@ -72,7 +72,62 @@ output: ## terraform output
 lock: ## Regenerate .terraform.lock.hcl for CI (linux_amd64) and Macs (darwin_arm64)
 	$(TF) -chdir=$(TF_DIR) providers lock -platform=linux_amd64 -platform=darwin_arm64
 
+## --- NetBox (netbox/README.md): the address authority ---
+## netbox/platform runs NetBox on Azure (off until netbox_enabled = true; it costs
+## money). netbox/records is the address plan as data, through the NetBox API.
+
+NETBOX_PLATFORM := netbox/platform
+NETBOX_RECORDS  := netbox/records
+
+.PHONY: netbox-init
+netbox-init: ## NetBox platform: terraform init against netbox/platform/backend.hcl
+	@[[ -f $(NETBOX_PLATFORM)/backend.hcl ]] || { echo "error: $(NETBOX_PLATFORM)/backend.hcl missing: copy backend.hcl.example (netbox/README.md)" >&2; exit 1; }
+	$(TF) -chdir=$(NETBOX_PLATFORM) init -backend-config=backend.hcl
+
+.PHONY: netbox-plan
+netbox-plan: ## NetBox platform: plan -out=tfplan
+	$(TF) -chdir=$(NETBOX_PLATFORM) plan -input=false -out=tfplan
+
+.PHONY: netbox-apply
+netbox-apply: ## NetBox platform: apply the saved plan from netbox-plan (and only that plan)
+	$(TF) -chdir=$(NETBOX_PLATFORM) apply tfplan
+
+.PHONY: netbox-records-init
+netbox-records-init: ## NetBox records: terraform init against netbox/records/backend.hcl
+	@[[ -f $(NETBOX_RECORDS)/backend.hcl ]] || { echo "error: $(NETBOX_RECORDS)/backend.hcl missing: copy backend.hcl.example (netbox/README.md)" >&2; exit 1; }
+	$(TF) -chdir=$(NETBOX_RECORDS) init -backend-config=backend.hcl
+
+.PHONY: netbox-records-plan
+netbox-records-plan: ## NetBox records: plan -out=tfplan (needs NETBOX_SERVER_URL + NETBOX_API_TOKEN)
+	@[[ -n "$${NETBOX_SERVER_URL:-}" && -n "$${NETBOX_API_TOKEN:-}" ]] || { echo "error: export NETBOX_SERVER_URL and NETBOX_API_TOKEN first (netbox/README.md)" >&2; exit 1; }
+	$(TF) -chdir=$(NETBOX_RECORDS) plan -input=false -out=tfplan
+
+.PHONY: netbox-records-apply
+netbox-records-apply: ## NetBox records: apply the saved plan from netbox-records-plan
+	$(TF) -chdir=$(NETBOX_RECORDS) apply tfplan
+
+.PHONY: netbox-test
+netbox-test: ## NetBox: validate + test both roots (mocked providers, no Azure, no NetBox)
+	@# The netbox provider marks server_url/api_token required, so `validate` wants them
+	@# even though nothing connects. These are deliberately not real.
+	@export NETBOX_SERVER_URL="$${NETBOX_SERVER_URL:-https://netbox.invalid}"; \
+	export NETBOX_API_TOKEN="$${NETBOX_API_TOKEN:-not-a-real-token}"; \
+	for d in $(NETBOX_PLATFORM) $(NETBOX_RECORDS); do \
+	  echo "== $$d"; \
+	  $(TF) -chdir=$$d init -backend=false -input=false >/dev/null || exit 1; \
+	  $(TF) -chdir=$$d validate || exit 1; \
+	  $(TF) -chdir=$$d test || exit 1; \
+	done
+
+.PHONY: netbox-lock
+netbox-lock: ## NetBox: regenerate both roots' .terraform.lock.hcl (linux_amd64 + darwin_arm64)
+	@for d in $(NETBOX_PLATFORM) $(NETBOX_RECORDS); do \
+	  $(TF) -chdir=$$d providers lock -platform=linux_amd64 -platform=darwin_arm64 || exit 1; \
+	done
+
 ## --- Azure IPAM (azure-ipam/README.md): two Terraform roots ---
+## ⚠ DORMANT since 2026-09-15 — NetBox is the authority (docs/netbox-plan.md). Nothing
+## here was ever applied. Kept as the fallback; don't dispatch its workflow.
 ## azure-ipam/entra is part 1 (Entra ID); azure-ipam/platform is part 2 (the Azure
 ## resources; off until ipam_enabled = true). Both are applied ONLY by GitHub Actions
 ## (.github/workflows/azure-ipam-deploy.yaml): these targets fetch, test, lock and plan.

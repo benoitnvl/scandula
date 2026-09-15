@@ -10,14 +10,14 @@
           <mxGeometry x="20" y="15" width="820" height="36" as="geometry" />
         </mxCell>
 
-        <!-- the address authority: Azure IPAM (azure-ipam/), not built by this repo -->
-        <mxCell id="azipam" value="Azure IPAM (Azure/ipam)  ·  the source of truth for ALL of Aberdeen's address space&#xa;landing-zone blocks  ·  on-premises blocks  ·  one block delegated to AVNM" style="rounded=1;html=0;dashed=1;fillColor=#f3f4f6;strokeColor=#4b5563;fontSize=12;fontStyle=1;fontColor=#111827;arcSize=6;" vertex="1" parent="1">
+        <!-- the address authority: NetBox (netbox/), self-hosted, not built by infra/ -->
+        <mxCell id="netbox" value="NetBox (netbox/)  ·  the source of truth for ALL of Aberdeen's address space&#xa;landing-zone blocks  ·  on-premises blocks  ·  one block delegated to AVNM&#xa;self-hosted on Azure Container Apps  ·  its own VNet allocated from the eas pool" style="rounded=1;html=0;dashed=1;fillColor=#f3f4f6;strokeColor=#4b5563;fontSize=12;fontStyle=1;fontColor=#111827;arcSize=6;" vertex="1" parent="1">
           <mxGeometry x="20" y="58" width="820" height="56" as="geometry" />
         </mxCell>
-        <mxCell id="e-azipam-root" value="delegates one block" style="endArrow=block;html=0;dashed=1;strokeColor=#4b5563;fontSize=11;fontColor=#111827;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="azipam" target="root">
+        <mxCell id="e-netbox-root" value="delegates one block" style="endArrow=block;html=0;dashed=1;strokeColor=#4b5563;fontSize=11;fontColor=#111827;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="netbox" target="root">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="legend-external" value="Deployed by azure-ipam/, not by infra/&#xa;(the address authority)" style="rounded=1;html=0;dashed=1;fillColor=#f3f4f6;strokeColor=#4b5563;fontSize=12;fontColor=#111827;arcSize=10;" vertex="1" parent="1">
+        <mxCell id="legend-external" value="Deployed by netbox/, not by infra/&#xa;(the address authority)" style="rounded=1;html=0;dashed=1;fillColor=#f3f4f6;strokeColor=#4b5563;fontSize=12;fontColor=#111827;arcSize=10;" vertex="1" parent="1">
           <mxGeometry x="870" y="425" width="270" height="44" as="geometry" />
         </mxCell>
         <mxCell id="legend-solid" value="Always built" style="rounded=1;html=0;fillColor=#ffffff;strokeColor=#374151;fontSize=12;fontColor=#1f2937;arcSize=10;" vertex="1" parent="1">

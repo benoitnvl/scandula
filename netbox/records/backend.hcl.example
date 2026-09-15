@@ -1,0 +1,6 @@
+# Copy to backend.hcl (gitignored) and fill in.
+resource_group_name  = "rg-scandula-tfstate"
+storage_account_name = "<the state account>"
+container_name       = "tfstate-netbox-records"
+key                  = "netbox-records.tfstate"
+use_azuread_auth     = true

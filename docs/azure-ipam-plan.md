@@ -1,5 +1,14 @@
 # Plan: Azure IPAM as the address authority, with AVNM taken on piece by piece
 
+> **⚠ Superseded on 2026-09-15 by [netbox-plan.md](netbox-plan.md).** NetBox is the
+> address authority now. This document is kept because the roots in
+> [`azure-ipam/`](../azure-ipam) are kept — dormant, never applied, as the fallback
+> until NetBox is live — and because the address *model* it describes is unchanged:
+> one block delegated to AVNM, AVNM allocating inside it, layers A and B enforcing it
+> in Azure. Only the system above that block changed. Don't dispatch
+> `azure-ipam-deploy.yaml`.
+
+
 **Status: nothing is deployed.** The address model below is decided. Built so far: Azure
 IPAM's deployment as Terraform ([`azure-ipam/`](../azure-ipam/README.md), decision 4), and the
 policies for layer A ([`infra/policy-onprem.tf`](../infra/policy-onprem.tf)) and layer B

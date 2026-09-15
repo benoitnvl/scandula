@@ -47,8 +47,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # infra/, and Azure IPAM's two roots (azure-ipam/README.md).
-        root: [infra, azure-ipam/entra, azure-ipam/platform]
+        # infra/, NetBox's two roots (netbox/README.md), and Azure IPAM's two —
+        # dormant since NetBox replaced it, but still validated while they're here.
+        root: [infra, netbox/platform, netbox/records, azure-ipam/entra, azure-ipam/platform]
+    # The netbox provider marks server_url/api_token as required, so `validate` wants
+    # them even though nothing here connects to anything. Deliberately not real.
+    env:
+      NETBOX_SERVER_URL: https://netbox.invalid
+      NETBOX_API_TOKEN: not-a-real-token
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3

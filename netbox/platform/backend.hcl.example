@@ -1,0 +1,8 @@
+# Copy to backend.hcl (gitignored) and fill in. ⚠ This state holds the NetBox
+# database password, the Redis key and Django's SECRET_KEY: give the container a
+# separate access policy, as azure-ipam's two parts have.
+resource_group_name  = "rg-scandula-tfstate"
+storage_account_name = "<the state account>"
+container_name       = "tfstate-netbox-platform"
+key                  = "netbox-platform.tfstate"
+use_azuread_auth     = true
