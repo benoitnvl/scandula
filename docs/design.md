@@ -179,11 +179,13 @@ Central is the next least restricted.
 
 Each is a follow-up PR, not something this pretends to have:
 
-- **Firewall diagnostics** to a Log Analytics workspace (that has its own cost).
 - **VPN / ExpressRoute gateway in a hub**, for on-premises connectivity. Set
   `reserved_prefixes` to the on-prem ranges first.
 - **DNS Private Resolver**, for private endpoints and conditional forwarding to
   on-premises DNS. Firewall Basic can't proxy DNS.
-- **Spokes.** They live in their workload repos: allocate from the region pool, attach
-  with `azurerm_virtual_hub_connection`.
+- **Spokes.** They live in their workload repos, not here. The pattern to copy is
+  [`examples/spoke`](../examples/spoke): the VNet and its subnets allocate from the region
+  pool (`ip_address_pool`, so no CIDR is ever written down), each subnet gets an NSG that
+  denies what it doesn't name, and `azurerm_virtual_hub_connection` attaches it to the
+  region's hub.
 - **A plan job in CI** over OIDC (see docs/bootstrap.md).

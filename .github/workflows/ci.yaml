@@ -47,9 +47,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # infra/, NetBox's two roots (netbox/README.md), and Azure IPAM's two —
-        # dormant since NetBox replaced it, but still validated while they're here.
-        root: [infra, netbox/platform, netbox/records, azure-ipam/entra, azure-ipam/platform]
+        # infra/, NetBox's two roots (netbox/README.md), Azure IPAM's two — dormant
+        # since NetBox replaced it, but still validated while they're here — and the
+        # spoke example, which is never applied from here, but an example that no
+        # longer validates is worse than none.
+        root: [infra, netbox/platform, netbox/records, azure-ipam/entra, azure-ipam/platform, examples/spoke]
     # The netbox provider marks server_url/api_token as required, so `validate` wants
     # them even though nothing here connects to anything. Deliberately not real.
     env:
