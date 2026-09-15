@@ -1,0 +1,40 @@
+# Copy to terraform.tfvars (gitignored) and fill in. The NetBox URL and token come
+# from the environment, never from here:
+#
+#   export NETBOX_SERVER_URL="$(terraform -chdir=netbox/platform output -raw netbox_url)"
+#   export NETBOX_API_TOKEN="<a token made in the NetBox UI>"
+
+aggregates = {
+  rfc1918-10 = {
+    prefix      = "10.0.0.0/8"
+    rir         = "RFC 1918"
+    description = "Aberdeen's internal IPv4 plan."
+  }
+}
+
+# The connectivity repo's ipam_root_prefix. Recorded as a container: inside it, AVNM
+# allocates, and NetBox only records that AVNM owns it.
+# ⚠ 10.64.0.0/12 is still a placeholder in infra too — check it against the real
+# landing-zone and on-premises ranges before either is applied.
+avnm_delegated_prefix = "10.64.0.0/12"
+
+# The connectivity repo's regions[*].address_prefix.
+avnm_region_prefixes = {
+  eas  = "10.64.0.0/14"
+  seas = "10.68.0.0/14"
+}
+
+# Everything outside Azure. This list is what infra's reserved_prefixes should hold —
+# `terraform output reserved_prefixes` gives it in that shape. Empty until Aberdeen
+# supplies the real ranges.
+onprem_prefixes = {
+  # aberdeen-office = {
+  #   prefix      = "10.10.0.0/16"
+  #   description = "Aberdeen office LAN."
+  # }
+  # datacentre = {
+  #   prefix      = "10.20.0.0/16"
+  #   description = "On-premises datacentre, being retired."
+  #   status      = "deprecated"
+  # }
+}

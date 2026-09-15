@@ -3,8 +3,8 @@
 Terraform for Aberdeen's **Azure connectivity core**: a **secured Virtual WAN** (one
 Standard hub per region, each with an Azure Firewall and routing intent), addressed from
 **Azure Virtual Network Manager (AVNM) IPAM**. AVNM runs **one block**, delegated to it by
-**Azure IPAM**, which is the authority for all of Aberdeen's address space
-([docs/azure-ipam-plan.md](docs/azure-ipam-plan.md)).
+**NetBox**, which is the authority for all of Aberdeen's address space
+([docs/netbox-plan.md](docs/netbox-plan.md)).
 
 This is an Aberdeen project. It isn't part of the benoitnvl homelab estate and shares
 nothing with it: no address space, DNS or connectivity.
@@ -75,13 +75,16 @@ infra/
   tests/             terraform test — mocked azurerm, no credentials
   backend.hcl.example
   terraform.tfvars.example
-azure-ipam/          Microsoft's Azure IPAM as Terraform (`make ipam-*`; runbook in its README)
-  entra/             part 1: app registrations, consent, Reader (applied by GitHub Actions only)
-  platform/          part 2: App Service, Cosmos DB, Key Vault, … (gated: costs money)
+netbox/              the address authority (`make netbox-*`; runbook in its README)
+  platform/          NetBox on Azure Container Apps + PostgreSQL + Redis (gated: costs money)
+  records/           the address plan as data, through the NetBox API
+azure-ipam/          ⚠ DORMANT — Microsoft's Azure IPAM, which NetBox replaced. Never
+                     applied; kept as the fallback. Don't dispatch its workflow
 docs/
   bootstrap.md       one-time: state account, RP registration, first apply
   design.md          topology, address plan, cost, what's deliberately not here yet
-  azure-ipam-plan.md the address authority: Azure IPAM, the on-premises policy, migration
+  netbox-plan.md     the address authority: NetBox, what AVNM keeps, the version pin
+  azure-ipam-plan.md superseded by netbox-plan.md; kept for the dormant azure-ipam/ roots
   zero-trust.md      plan: default-deny east-west, an egress allow-list, guardrail policies
   diagrams/          architecture + zero-trust .drawio sources and their .svg exports (`make diagram`)
 scripts/
@@ -113,9 +116,11 @@ and that every validation rejects what it should. `make mutants` proves each val
 is load-bearing.
 
 CI (GitHub-hosted `ubuntu-latest`: stazzona has no runner scale set for this repo) runs
-`terraform fmt -check`, then `validate` + `test` for `infra/` and both Azure IPAM roots, and a
+`terraform fmt -check`, then `validate` + `test` for `infra/`, both NetBox roots and both
+(dormant) Azure IPAM roots, and a
 trivy misconfig + secret scan, on every PR. **`ci.yaml` never touches Azure.** For `infra/`, `make apply` from a workstation
-is the only write path. Azure IPAM is the other way round: it's applied **only** by the manual
+is the only write path, and the same for NetBox (`make netbox-plan` → `make netbox-apply`).
+Azure IPAM was the other way round: it's applied **only** by the manual
 `azure-ipam deploy` workflow, over OIDC, and only with the digest of a reviewed plan
 ([azure-ipam/README.md](azure-ipam/README.md#deploying-github-actions-only)).
 

@@ -100,6 +100,6 @@ resource "azurerm_management_group_policy_assignment" "onprem_overlap" {
   })
 
   non_compliance_message {
-    content = "This VNet's address space overlaps an on-premises range. Take a range from Azure IPAM instead."
+    content = "This VNet's address space overlaps an on-premises range. Take a range from the AVNM pool for your region instead."
   }
 }

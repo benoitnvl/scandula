@@ -1,0 +1,23 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+
+# ⚠ Building this costs about $60-100/month and it runs continuously. Leave it false
+# until there's a paid subscription to put it on (netbox/README.md#cost).
+netbox_enabled = false
+
+location    = "eastasia"
+name_prefix = "scandula"
+
+# From the connectivity repo: `terraform output ipam_region_pool_ids`. NetBox's own
+# VNet takes an allocation like any other workload.
+ipam_pool_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-scandula-connectivity/providers/Microsoft.Network/networkManagers/avnm-scandula/ipamPools/ipam-scandula-eas"
+
+# Who may reach the UI and the API. Required while public_ingress is on: an empty
+# list there would publish NetBox to the internet, and the plan refuses it.
+allowed_source_cidrs = {
+  # aberdeen-office = "203.0.113.0/24"
+  # ci-runners      = "198.51.100.7/32"
+}
+
+# Set false once a VPN or ExpressRoute gateway exists in a hub, so NetBox can be
+# internal-only.
+public_ingress = true

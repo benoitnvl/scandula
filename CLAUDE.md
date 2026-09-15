@@ -45,19 +45,25 @@ Validations keep it canonical, /24 or larger, and inside its own region pool. Th
 pool must never overlap `reserved_prefixes`: on-premises ranges, empty until someone sets
 them.
 
-## ⚠ The address authority is Azure IPAM (planned), not this repo
+## ⚠ The address authority is NetBox, not this repo
 
-Decided 2026-09-11 (`docs/azure-ipam-plan.md`). Microsoft's Azure IPAM becomes the source of
+Decided 2026-09-15 (`docs/netbox-plan.md`), replacing Azure IPAM. NetBox is the source of
 truth for **all** of Aberdeen's address space: the existing Enterprise-Scale landing zones
 (no AVNM), the on-premises RFC 1918 ranges, and **one block delegated to AVNM**, which is this
 repo's `ipam_root_prefix`. Workloads move under AVNM piece by piece.
+
+**The Azure side did not change.** AVNM still allocates inside the delegated block, layers A
+and B still enforce it, spokes still allocate from AVNM pools. NetBox replaced only the system
+above that block — because it can be queried from Terraform and Azure IPAM can't.
 
 - `10.64.0.0/12` is a **placeholder**. Don't apply until it's checked against the landing-zone
   and on-premises ranges.
 - *Reserved* (IPAM, `reserved_prefixes`) isn't *blocked*. Blocking needs Azure Policy: layer A
   denies on-premises ranges everywhere, and layer B enforces AVNM allocation per migrated scope
   only.
-- Never make Azure IPAM reservations inside AVNM's block. AVNM can't see them.
+- Never allocate inside AVNM's block from NetBox. AVNM can't see those allocations, and
+  NetBox can't see AVNM's. The block is recorded in NetBox with status **container** for
+  exactly this reason — keep it that way.
 - **Layer A is `infra/policy-onprem.tf`**, off until `onprem_policy.management_group_id` is
   set. It reaches every VNet under that management group, far beyond this repo, so never
   set it without the user saying so. Move Audit → Deny only after its findings are reviewed.
@@ -70,8 +76,32 @@ repo's `ipam_root_prefix`. Workloads move under AVNM piece by piece.
   **Keep the count expressions:** Microsoft's sample uses bare `[*]` conditions, which are true
   over an empty array, so it lets through a VNet with no allocation at all.
 
-Azure IPAM is deployed by two Terraform roots in `azure-ipam/` (runbook in its README), not by
-Microsoft's `deploy.ps1`:
+NetBox is self-hosted on Azure by two Terraform roots in `netbox/` (runbook in its README):
+
+- `netbox/platform` runs NetBox itself — Container Apps (web, rqworker, a housekeeping job),
+  PostgreSQL Flexible Server, Azure Cache for Redis, Key Vault, an Azure Files share. **Off
+  until `netbox_enabled = true`**: about **$60-100/month**, continuously. It refuses credit
+  subscriptions. `tests/` asserts that off plans nothing billable. Applied from a workstation
+  (`make netbox-plan` → `make netbox-apply`), not by CI.
+- `netbox/records` is the address plan as data through the NetBox API. Its URL and token come
+  from `NETBOX_SERVER_URL` / `NETBOX_API_TOKEN` in the environment — **never** a tfvars file.
+- **The version pin has two sides.** NetBox **v4.6.5** (by image digest in
+  `netbox/platform/release.json`) and provider **~> 5.8**, because 4.6.5 is the newest NetBox
+  that provider is tested against. v4.6.10 and v4.7.0 exist and are past the ceiling; NetBox
+  breaks its API in minor releases and the provider only *warns*. Move both together, in a PR.
+  Provider 6.0.0 will be auto-generated — a migration, not a bump.
+- **NetBox's own VNet allocates from AVNM.** The authority for the address plan doesn't get to
+  write its own range down either. Keep it that way.
+- **Public ingress with a mandatory allow-list.** `public_ingress = true` and an empty
+  `allowed_source_cidrs` is refused by a precondition. It's public only because there's no VPN
+  or ExpressRoute gateway yet; switch to internal once there is.
+- `make netbox-test` after changing either root; `make mutants` after touching a `variables.tf`.
+
+⚠ **`azure-ipam/` is DORMANT** (since 2026-09-15) and was **never applied** — there is nothing
+deployed and nothing to destroy. It stays as the fallback until NetBox is live. **Don't dispatch
+`azure-ipam-deploy.yaml`**, and don't create the OIDC identities or state containers it wants.
+If NetBox sticks, delete the directory, the workflow and those identities. The rules below apply
+only if it is ever revived:
 
 - `azure-ipam/entra` is part 1 (the Entra ID objects) and `azure-ipam/platform` is part 2 (the
   Azure resources). **Both are applied only by `.github/workflows/azure-ipam-deploy.yaml`**,

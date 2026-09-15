@@ -1,0 +1,8 @@
+{
+  "netbox_version": "v4.6.5",
+  "image": "docker.io/netboxcommunity/netbox",
+  "image_digest": "sha256:691ec1a4f569f3dfb9fefd9f086cca1b39689ad59c3eae753712a741447e5e60",
+  "provider_version": "5.8.0",
+  "postgres_version": "16",
+  "notes": "v4.6.5 is the newest NetBox the e-breuninger provider is tested against (its table stops at 4.6.5 for provider 5.6.1+). NetBox v4.6.10 and v4.7.0 exist but are past that ceiling: the provider only warns, it does not stop, and NetBox breaks API compatibility in minor releases. Bump both together, after checking the provider's table."
+}

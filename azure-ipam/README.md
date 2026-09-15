@@ -1,5 +1,16 @@
 # Azure IPAM, as Terraform, deployed by GitHub Actions
 
+> **⚠ DORMANT since 2026-09-15.** [NetBox](../netbox/README.md) is the address
+> authority now ([docs/netbox-plan.md](../docs/netbox-plan.md)). Nothing here was ever
+> applied, so there is nothing deployed and nothing to destroy; it is kept as the
+> fallback until NetBox is live.
+>
+> **Do not dispatch `azure-ipam deploy`.** The one-time Azure setup it needs — two OIDC
+> identities with Graph `Directory.ReadWrite.All`, the federated credentials, two state
+> containers — should not be created either. If NetBox sticks, delete this directory,
+> its workflow and those identities.
+
+
 Microsoft's [Azure IPAM](https://github.com/Azure/ipam) (`Azure/ipam`), deployed by two
 Terraform roots instead of its PowerShell installer (`deploy.ps1` + Bicep). They reproduce what
 `deploy.ps1` creates at release **v3.6.0**, with the differences listed below. **Both are applied

@@ -27,8 +27,10 @@ nearly all of it: traffic is *seen*, not *controlled*. And with no diagnostics y
 even seen.
 
 What already helped: no inbound DNAT; private **and** internet traffic forced through the hub
-firewall; on the control plane, OIDC with no stored secrets, an identity per Azure IPAM part,
-split state, Key Vault RBAC, and Cosmos DB key auth off.
+firewall; on the control plane, OIDC with no stored secrets, split state and Key Vault RBAC.
+NetBox's own platform (`netbox/`, the address authority since 2026-09-15) keeps its database
+and cache off the internet entirely — VNet injection for PostgreSQL, a private endpoint for
+Redis — and its UI is reachable only from named source ranges.
 
 **Both rules are now gone.** Each flow and each destination is named in `east_west_flows`,
 `egress_https_fqdns`, `egress_http_fqdns` and `egress_fqdn_tags`; validations refuse `"Any"`
@@ -143,19 +145,23 @@ from Internet so it can't be undone locally.
 
 Private endpoints for PaaS need private DNS, and Firewall Basic has no DNS proxy, so a **DNS
 Private Resolver** in the hub is a prerequisite (`docs/design.md` already lists it as missing).
-This also applies to **Azure IPAM's own platform**: today its App Service, Key Vault and Cosmos
-DB are reachable over public endpoints. Making them private is a deliberate deviation from
-upstream and would need VNet integration.
+This also applies to **NetBox's own platform**, though less than it did to Azure IPAM's: its
+PostgreSQL is VNet-injected and its Redis is behind a private endpoint, so what's left public
+is the web ingress (restricted to named source CIDRs, because there's no gateway to reach it
+privately yet), the Key Vault and the storage account. `public_ingress = false` closes the
+first as soon as a VPN or ExpressRoute gateway exists.
 
 ### D8. Identity plane
 
-Already good: OIDC without stored secrets, an identity per part, split state, digest-gated
-applies, Key Vault RBAC, Cosmos key auth off. Remaining:
+Already good: OIDC without stored secrets, split state, Key Vault RBAC, and a user-assigned
+identity that reads NetBox's secrets rather than any of them being handed out. Remaining:
 
-- The **entra CI identity holds Graph `Directory.ReadWrite.All`**, which is near
-  Global Administrator. Put it behind PIM, or make part 1 a rare human-run task.
-- **Conditional Access** for the Azure IPAM UI app (MFA, compliant device), or run it
-  API-only (`ui_enabled = false`), which also drops the `Directory.Read.All` consent.
+- **NetBox has local accounts only.** It supports OIDC against Entra ID
+  (`REMOTE_AUTH_BACKEND`), which is the obvious follow-up now that it holds the address plan.
+- **NetBox's API token is a bearer token in someone's environment.** Scope it, rotate it, and
+  keep it out of tfvars — `netbox/records` reads it from `NETBOX_API_TOKEN` only.
+- The dormant **azure-ipam** identities were never created, and shouldn't be: the entra one
+  would hold Graph `Directory.ReadWrite.All`, which is near Global Administrator.
 
 ## Order of work
 
