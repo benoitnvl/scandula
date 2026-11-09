@@ -1,7 +1,7 @@
 name: claude
 
 # Two jobs, because claude-code-action v1 picks its mode from whether `prompt` is set:
-#  - review:  every non-draft PR (opened, new commits, ready, reopened) → Claude reviews it
+#  - review:  every non-draft PR when opened, made ready or reopened (not on each push) → Claude reviews it
 #  - respond: "@claude …" in an issue or PR comment → Claude answers
 #
 # ⚠ Until 2026-09-10 this was one job on @beta with no prompt. That only ever answered
@@ -17,7 +17,23 @@ name: claude
 
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
+    # 💰 USAGE (2026-11-09): reviews draw on the Max subscription's limits, shared
+    # with interactive sessions. 10 Oct to 9 Nov: 197 reviews across torra,
+    # bonifaziu and scandula (~$203 at API list price). So:
+    #  - NO `synchronize`: a new push no longer buys a fresh full review (that was
+    #    ~25% of reviews). For a re-review after changes, comment
+    #    "@claude review this PR again"; the `respond` job handles it.
+    #  - paths-ignore: a PR whose EVERY changed file is docs or ciphertext doesn't
+    #    start this workflow at all. A review of an encrypted blob reads nothing. A
+    #    PR with any other file is still reviewed.
+    types: [opened, ready_for_review, reopened]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '**/terraform.tfstate'
+      - '**/*.sops.yaml'
+      - '**/*.sops'
+      - '**/*.enc.env'
   issue_comment:
     types: [created]
   pull_request_review_comment:
